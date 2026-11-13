@@ -1,41 +1,55 @@
--- Workouts & Meals — one-time Supabase setup
--- Run this once in Supabase: Dashboard → SQL Editor → New query → paste → Run.
+-- Workouts & Meals: database setup
+-- Run once in Supabase: SQL Editor → New query → paste all of this → Run.
 -- Safe to re-run.
 
--- One row per signed-in user, holding the whole dashboard (program, logs,
--- meals, water, supplements, weigh-ins, profile) as JSON.
-create table if not exists public.dashboard_state (
-  user_id    uuid primary key references auth.users (id) on delete cascade,
-  data       jsonb       not null,
+-- Program, saved meals, supplements and profile/targets (a single row, id = 'main').
+create table if not exists public.app_settings (
+  id         text primary key default 'main',
+  data       jsonb not null,
   updated_at timestamptz not null default now()
 );
 
--- Lock it down: the publishable key in index.html is public, so Row Level
--- Security is what keeps the data private. Each user can only touch their own row.
-alter table public.dashboard_state enable row level security;
+-- One row per day. The JSON columns hold the detail; the number columns are
+-- daily totals the app fills in, so the table is easy to read in Supabase.
+create table if not exists public.daily_logs (
+  day          date primary key,
+  workout      jsonb,                                  -- exercises, sets (weight/reps/done), run
+  food         jsonb   not null default '[]'::jsonb,   -- logged meals with macros and servings
+  water        jsonb   not null default '[]'::jsonb,   -- each pour in oz
+  supplements  jsonb   not null default '{}'::jsonb,   -- which toggles were checked
+  weight_lbs   numeric,
+  water_oz     integer not null default 0,
+  calories     integer not null default 0,
+  protein_g    integer not null default 0,
+  carbs_g      integer not null default 0,
+  fat_g        integer not null default 0,
+  workout_done boolean not null default false,
+  updated_at   timestamptz not null default now()
+);
 
-drop policy if exists "read own dashboard"   on public.dashboard_state;
-drop policy if exists "insert own dashboard" on public.dashboard_state;
-drop policy if exists "update own dashboard" on public.dashboard_state;
-drop policy if exists "delete own dashboard" on public.dashboard_state;
+-- No sign-in: the site's public key can read and write both tables.
+alter table public.app_settings enable row level security;
+alter table public.daily_logs   enable row level security;
 
-create policy "read own dashboard" on public.dashboard_state
-  for select to authenticated
-  using ((select auth.uid()) = user_id);
+drop policy if exists "dashboard access" on public.app_settings;
+create policy "dashboard access" on public.app_settings
+  for all to anon, authenticated using (true) with check (true);
 
-create policy "insert own dashboard" on public.dashboard_state
-  for insert to authenticated
-  with check ((select auth.uid()) = user_id);
+drop policy if exists "dashboard access" on public.daily_logs;
+create policy "dashboard access" on public.daily_logs
+  for all to anon, authenticated using (true) with check (true);
 
-create policy "update own dashboard" on public.dashboard_state
-  for update to authenticated
-  using ((select auth.uid()) = user_id)
-  with check ((select auth.uid()) = user_id);
+grant select, insert, update, delete on public.app_settings, public.daily_logs to anon, authenticated;
 
-create policy "delete own dashboard" on public.dashboard_state
-  for delete to authenticated
-  using ((select auth.uid()) = user_id);
-
--- Signed-out visitors (the anon role) get nothing.
-revoke all on public.dashboard_state from anon;
-grant select, insert, update, delete on public.dashboard_state to authenticated;
+-- Live updates: a change on one device shows up on the others right away.
+do $$
+begin
+  if not exists (select 1 from pg_publication_tables
+                 where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'daily_logs') then
+    alter publication supabase_realtime add table public.daily_logs;
+  end if;
+  if not exists (select 1 from pg_publication_tables
+                 where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'app_settings') then
+    alter publication supabase_realtime add table public.app_settings;
+  end if;
+end $$;

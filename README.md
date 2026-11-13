@@ -8,19 +8,19 @@ A single-file React dashboard (`index.html`, using Tailwind and Recharts from CD
 - **Today**: the day's planned session, water, protein/calories, supplements and weigh-in
 - **Workouts**: an editable weekly program, set-by-set logging with progression suggestions, and PR detection
 - **Nutrition**: macros against daily targets, a 100 oz water tracker, supplement toggles, saved meals and food suggestions for whatever is left
-- **Progress**: weight trend, weekly volume, consistency calendar, PR board, profile and targets, and backup/restore
+- **Progress**: weight trend, weekly volume, consistency calendar, PR board, profile and targets (3,200 kcal · 185 P · 400 C · 95 F), and backup/restore
 
-## Data & sync
+## Data
 
-Everything saves in the browser right away. When you sign in (the pill in the top-right), the dashboard also syncs to Supabase, so the phone and laptop stay in step.
+There's no sample data and no sign-in. Every change saves straight to Supabase within about a second. Each open device gets the update live, and the app reloads from the database whenever you come back to the tab. The status pill in the top-right shows **Live**, **Saving…**, or **Not saving** (tap it to see why). If the connection drops, changes stay on the device and save once it's back.
 
 ### One-time Supabase setup
-1. Supabase dashboard → **SQL Editor** → paste [`supabase/schema.sql`](supabase/schema.sql) → **Run**.
-2. **Authentication → URL Configuration**: set **Site URL** to `https://austin-olbrych.github.io/workouts-and-meals/` and add it under **Redirect URLs**.
-3. Create your login, either from the site (**Sign in to sync → Create an account**, then confirm the email) or under **Authentication → Users → Add user** with "Auto Confirm User" ticked.
-4. Optional: turn off **Authentication → Sign In / Providers → Allow new users to sign up** once your account exists, so nobody else can create one.
+Supabase dashboard → **SQL Editor** → paste [`supabase/schema.sql`](supabase/schema.sql) → **Run**. That creates:
 
-The publishable key in `index.html` is meant to be public. Row Level Security in `schema.sql` limits each signed-in user to their own row, and signed-out visitors get nothing.
+- `app_settings`: program, saved meals, supplements, profile and macro targets (one row)
+- `daily_logs`: one row per day with the workout, food, water, supplements and weigh-in, plus daily totals (`water_oz`, `calories`, `protein_g`, `carbs_g`, `fat_g`, `workout_done`)
+
+Because there's no sign-in, anyone with the site link can see and edit the data. Use **Progress → Data & backup → Download** now and then to keep a copy.
 
 ## Hosting
 GitHub Pages → **Settings → Pages → Deploy from a branch → `main` / root**.
