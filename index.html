@@ -1,0 +1,2116 @@
+<!DOCTYPE html>
+<html lang="en" style="color-scheme: dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Workouts & Meals</title>
+<meta name="theme-color" content="#020617" />
+<meta name="description" content="Personal workout, nutrition and progress dashboard." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] } } } };
+</script>
+<style>
+  html, body { background: #020617; }
+  body { font-feature-settings: "cv11", "ss01"; -webkit-tap-highlight-color: transparent; }
+  input[type=number]::-webkit-outer-spin-button,
+  input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type=number] { -moz-appearance: textfield; }
+  select option { background: #0f172a; color: #fff; }
+  .orb { position: fixed; border-radius: 9999px; filter: blur(90px); pointer-events: none; z-index: 0; }
+  .glow-emerald { text-shadow: 0 0 18px rgba(52, 211, 153, .55); }
+  .glow-cyan { text-shadow: 0 0 18px rgba(34, 211, 238, .55); }
+  .scrollbar-none::-webkit-scrollbar { display: none; }
+  .scrollbar-none { scrollbar-width: none; }
+  @keyframes toastIn { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+  .toast-in { animation: toastIn .25s ease-out; }
+  @keyframes pulseGlow { 0%,100% { box-shadow: 0 0 0 0 rgba(52,211,153,.0); } 50% { box-shadow: 0 0 22px 2px rgba(52,211,153,.35); } }
+  .pulse-glow { animation: pulseGlow 2.4s ease-in-out infinite; }
+  .recharts-surface:focus, .recharts-wrapper:focus, .recharts-sector:focus { outline: none; }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js"></script>
+<script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
+</head>
+<body class="bg-slate-950 text-white font-sans antialiased min-h-screen">
+<div id="root">
+  <div style="min-height:100vh;display:grid;place-items:center;color:#94a3b8;font:500 14px Inter,system-ui,sans-serif">Loading dashboard…</div>
+</div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo, useCallback, useRef } = React;
+const {
+  ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis,
+  CartesianGrid, Tooltip, ReferenceLine, Cell,
+} = Recharts;
+
+/* =========================================================
+   Cloud sync config (Supabase)
+   The publishable key is meant to be public — Row Level Security
+   (see supabase/schema.sql) keeps each signed-in user to their own row.
+   ========================================================= */
+const SUPABASE_URL = 'https://gvsvljaygdfxjpnahyzi.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_mxolwm4Z_ig75FV4XNb_rw_30ys5eZr';
+const SB_TABLE = 'dashboard_state';
+let sb = null;
+try {
+  if (window.supabase && SUPABASE_URL && SUPABASE_KEY) {
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
+  }
+} catch (e) { sb = null; }
+
+const MY_TARGETS = { cal: 3200, p: 185, c: 400, f: 95 };
+
+/* =========================================================
+   Helpers
+   ========================================================= */
+const STORE_KEY = 'wm-dashboard-v1';
+const DAY_KEYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const DAY_NAMES = { Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday', Sun: 'Sunday' };
+const MUSCLES = ['Chest', 'Quads', 'Hamstrings', 'Glutes', 'Back', 'Shoulders', 'Triceps', 'Biceps', 'Calves', 'Core', 'Full body', 'Other'];
+const PRIORITY = ['Chest', 'Quads', 'Hamstrings', 'Glutes'];
+const TABS = ['today', 'workouts', 'nutrition', 'progress'];
+
+const pad = (n) => String(n).padStart(2, '0');
+const toKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const fromKey = (k) => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d); };
+const todayKey = () => toKey(new Date());
+const addDays = (k, n) => { const d = fromKey(k); d.setDate(d.getDate() + n); return toKey(d); };
+const dayKeyOf = (k) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][fromKey(k).getDay()];
+const weekStart = (k) => { const d = fromKey(k); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return toKey(d); };
+const fmtShort = (k) => fromKey(k).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+const fmtLong = (k) => fromKey(k).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+const uid = () => Math.random().toString(36).slice(2, 10);
+const round5 = (x) => Math.round(x / 5) * 5;
+const e1rm = (w, r) => (w > 0 && r > 0 ? w * (1 + r / 30) : 0);
+const num = (v) => (v === '' || v == null || isNaN(Number(v)) ? 0 : Number(v));
+const fmtW = (w) => (num(w) > 0 ? `${num(w)} lb` : 'BW');
+const fmtInt = (n) => Math.round(n).toLocaleString();
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const storage = {
+  load() { try { const s = localStorage.getItem(STORE_KEY); return s ? JSON.parse(s) : null; } catch (e) { return null; } },
+  save(v) { try { localStorage.setItem(STORE_KEY, JSON.stringify(v)); return true; } catch (e) { return false; } },
+};
+
+/* =========================================================
+   Defaults: program, meals, foods, supplements
+   ========================================================= */
+const mk = (name, muscle, sets, repMin, repMax, weight, increment = 5, notes = '') =>
+  ({ id: uid(), name, muscle, sets, repMin, repMax, weight, increment, notes });
+
+function defaultProgram() {
+  return {
+    id: 'prog-' + uid(),
+    name: 'Legs & Chest Priority · 5-Day',
+    notes: 'Legs and chest hit twice a week at 16–20 hard sets each; back and arms held at maintenance. Tuesday is the run.',
+    days: {
+      Mon: { title: 'Legs A', focus: 'Quad focus', type: 'strength', exercises: [
+        mk('Back Squat', 'Quads', 4, 6, 8, 205, 10, 'Rest 2–3 min. Stop 1–2 reps shy of failure.'),
+        mk('Romanian Deadlift', 'Hamstrings', 3, 8, 10, 185, 10, 'Hinge to a deep hamstring stretch.'),
+        mk('Bulgarian Split Squat', 'Quads', 3, 8, 10, 40, 5, 'Dumbbell per hand · reps per leg.'),
+        mk('Leg Extension', 'Quads', 3, 12, 15, 110, 10, 'Pause 1 s at the top.'),
+        mk('Seated Leg Curl', 'Hamstrings', 3, 10, 12, 90, 10),
+        mk('Standing Calf Raise', 'Calves', 4, 10, 15, 135, 10, 'Full stretch, 1 s pause at the bottom.'),
+      ] },
+      Tue: { title: 'Run + Core', focus: 'Zone 2 conditioning', type: 'cardio', cardioTarget: '3–4 mi at an easy, conversational pace (Zone 2)', exercises: [
+        mk('Hanging Leg Raise', 'Core', 3, 10, 15, 0, 5, 'Bodyweight — hold a dumbbell once 15s are easy.'),
+        mk('Cable Crunch', 'Core', 3, 12, 15, 70, 10),
+      ] },
+      Wed: { title: 'Chest A', focus: 'Push · flat press focus', type: 'strength', exercises: [
+        mk('Barbell Bench Press', 'Chest', 4, 6, 8, 165, 5, 'Rest 2–3 min. Shoulder blades pinned.'),
+        mk('Incline Dumbbell Press', 'Chest', 3, 8, 10, 60, 5, 'Per hand · 30° bench.'),
+        mk('Cable Fly (low to high)', 'Chest', 3, 12, 15, 30, 5, 'Per side.'),
+        mk('Seated DB Shoulder Press', 'Shoulders', 3, 8, 10, 45, 5, 'Per hand.'),
+        mk('Lateral Raise', 'Shoulders', 3, 12, 15, 20, 5, 'Per hand.'),
+        mk('Rope Triceps Pushdown', 'Triceps', 3, 10, 12, 50, 5),
+      ] },
+      Thu: { title: 'Rest', focus: 'Recover', type: 'rest', exercises: [] },
+      Fri: { title: 'Legs B', focus: 'Glutes & hamstrings', type: 'strength', exercises: [
+        mk('Barbell Hip Thrust', 'Glutes', 4, 8, 10, 225, 10, '1 s squeeze at lockout.'),
+        mk('Leg Press', 'Quads', 3, 10, 12, 360, 20, 'Feet mid-platform, full depth.'),
+        mk('Lying Leg Curl', 'Hamstrings', 3, 10, 12, 80, 10),
+        mk('Walking Lunge', 'Quads', 3, 10, 12, 30, 5, 'Per hand · reps per leg.'),
+        mk('Seated Calf Raise', 'Calves', 4, 12, 15, 90, 10),
+        mk('Pull-Up', 'Back', 3, 6, 10, 0, 5, 'Bodyweight. Add weight once 3×10 is clean.'),
+      ] },
+      Sat: { title: 'Chest B', focus: 'Upper · incline focus', type: 'strength', exercises: [
+        mk('Incline Barbell Bench', 'Chest', 4, 6, 8, 135, 5),
+        mk('Weighted Dip', 'Chest', 3, 8, 10, 25, 5, 'Lean forward to bias chest.'),
+        mk('Pec Deck', 'Chest', 3, 12, 15, 120, 10),
+        mk('Lat Pulldown', 'Back', 3, 8, 10, 140, 10),
+        mk('Chest-Supported DB Row', 'Back', 3, 8, 10, 60, 5, 'Per hand.'),
+        mk('EZ-Bar Curl', 'Biceps', 3, 10, 12, 60, 5),
+      ] },
+      Sun: { title: 'Rest', focus: 'Recover', type: 'rest', exercises: [] },
+    },
+  };
+}
+
+const DEFAULT_MEALS = [
+  { id: 'm-oats', name: 'Overnight oats + whey', tag: 'Breakfast', cal: 520, p: 38, c: 64, f: 12 },
+  { id: 'm-eggs', name: 'Eggs & toast (4 eggs, 2 slices)', tag: 'Breakfast', cal: 460, p: 29, c: 30, f: 24 },
+  { id: 'm-bowl', name: 'Chicken rice bowl', tag: 'Lunch', cal: 640, p: 50, c: 72, f: 14 },
+  { id: 'm-sandwich', name: 'Turkey & cheese sandwich', tag: 'Lunch', cal: 480, p: 36, c: 44, f: 16 },
+  { id: 'm-yogurt', name: 'Greek yogurt parfait', tag: 'Snack', cal: 330, p: 27, c: 40, f: 6 },
+  { id: 'm-pbbanana', name: 'Banana + peanut butter', tag: 'Snack', cal: 295, p: 8, c: 34, f: 16 },
+  { id: 'm-pasta', name: 'Ground turkey pasta', tag: 'Dinner', cal: 720, p: 46, c: 86, f: 18 },
+  { id: 'm-salmon', name: 'Salmon, potatoes & greens', tag: 'Dinner', cal: 620, p: 40, c: 54, f: 24 },
+  { id: 'm-shake', name: 'Protein shake + creatine', tag: 'Post-workout', cal: 370, p: 56, c: 20, f: 8 },
+  { id: 'm-collagen', name: 'Pre-workout + collagen', tag: 'Pre-workout', cal: 40, p: 10, c: 0, f: 0 },
+];
+
+const FOOD_DB = [
+  { id: 'f-whey', name: 'Whey protein (1 scoop)', cal: 120, p: 24, c: 3, f: 1.5 },
+  { id: 'f-greek', name: 'Nonfat Greek yogurt (1 cup)', cal: 130, p: 23, c: 9, f: 0 },
+  { id: 'f-chicken', name: 'Chicken breast (6 oz cooked)', cal: 280, p: 53, c: 0, f: 6 },
+  { id: 'f-cottage', name: 'Cottage cheese, 2% (1 cup)', cal: 180, p: 24, c: 10, f: 5 },
+  { id: 'f-tuna', name: 'Tuna pouch (2.6 oz)', cal: 80, p: 17, c: 0, f: 1 },
+  { id: 'f-eggs', name: '3 whole eggs', cal: 215, p: 19, c: 1, f: 15 },
+  { id: 'f-jerky', name: 'Beef jerky (1 oz)', cal: 80, p: 11, c: 4, f: 1 },
+  { id: 'f-milk', name: '2% milk (1 cup)', cal: 120, p: 8, c: 12, f: 5 },
+  { id: 'f-rice', name: 'White rice (1 cup cooked)', cal: 205, p: 4, c: 45, f: 0 },
+  { id: 'f-bagel', name: 'Plain bagel', cal: 280, p: 11, c: 55, f: 2 },
+  { id: 'f-banana', name: 'Banana', cal: 105, p: 1, c: 27, f: 0 },
+  { id: 'f-oats', name: 'Oats (½ cup dry)', cal: 150, p: 5, c: 27, f: 3 },
+  { id: 'f-sweetpot', name: 'Sweet potato (medium)', cal: 115, p: 2, c: 27, f: 0 },
+  { id: 'f-ricecake', name: 'Rice cakes + honey (2)', cal: 130, p: 2, c: 30, f: 0 },
+  { id: 'f-pb', name: 'Peanut butter (2 tbsp)', cal: 190, p: 7, c: 7, f: 16 },
+  { id: 'f-almonds', name: 'Almonds (1 oz)', cal: 165, p: 6, c: 6, f: 14 },
+  { id: 'f-avocado', name: 'Avocado (½)', cal: 160, p: 2, c: 9, f: 15 },
+  { id: 'f-salmon', name: 'Salmon (5 oz cooked)', cal: 290, p: 32, c: 0, f: 17 },
+];
+
+const DEFAULT_SUPPS = [
+  { id: 's-creatine', name: 'Creatine', dose: '5 g', when: 'In the protein shake · after the gym or before bed' },
+  { id: 's-shake', name: 'Protein shake', dose: '2 scoops', when: 'Nightly — logs the shake’s macros', mealId: 'm-shake' },
+  { id: 's-preworkout', name: 'Pre-workout', dose: '1 scoop', when: 'Before leaving for the gym' },
+  { id: 's-collagen', name: 'Collagen', dose: '1 scoop', when: 'Mixed into the pre-workout — logs 10 g protein', mealId: 'm-collagen' },
+];
+
+function defaultProfile() {
+  return {
+    name: 'Austin', heightIn: 71, startWeight: 175, age: 30, sex: 'male',
+    activity: 1.55, goal: 'lean-bulk', targetWeight: '', waterGoal: 100, workoutsPerWeek: 5,
+    customTargets: true, custom: { ...MY_TARGETS },
+  };
+}
+
+function defaultState() {
+  const prog = defaultProgram();
+  return {
+    version: 1, profile: defaultProfile(), programs: [prog], activeProgramId: prog.id,
+    workoutLogs: {}, weights: [], meals: DEFAULT_MEALS.map((m) => ({ ...m })), foodLog: {},
+    water: {}, supplements: DEFAULT_SUPPS.map((s) => ({ ...s })), suppLog: {}, sample: false,
+    targetsV2: true, savedAt: 0,
+  };
+}
+
+// Fill in any fields a stored/remote copy is missing, and apply one-time migrations.
+function normalize(obj) {
+  const d = defaultState();
+  const n = { ...d, ...obj, profile: { ...d.profile, ...(obj.profile || {}) } };
+  if (!obj.targetsV2) { n.profile.customTargets = true; n.profile.custom = { ...MY_TARGETS }; n.targetsV2 = true; }
+  return n;
+}
+
+function stripHistory(s) {
+  return { ...s, workoutLogs: {}, weights: [{ date: todayKey(), lbs: num(s.profile.startWeight) }], foodLog: {}, water: {}, suppLog: {}, sample: false, savedAt: Date.now() };
+}
+
+const entryFrom = (m, extra = {}) => ({ id: uid(), mealId: m.id, name: m.name, cal: m.cal, p: m.p, c: m.c, f: m.f, servings: 1, ...extra });
+
+/* =========================================================
+   Derived data
+   ========================================================= */
+const activeProgram = (s) => s.programs.find((p) => p.id === s.activeProgramId) || s.programs[0];
+const dayTotals = (s, date) => (s.foodLog[date] || []).reduce((a, x) => ({
+  cal: a.cal + x.cal * x.servings, p: a.p + x.p * x.servings, c: a.c + x.c * x.servings, f: a.f + x.f * x.servings,
+}), { cal: 0, p: 0, c: 0, f: 0 });
+const waterTotal = (s, date) => (s.water[date] || []).reduce((a, b) => a + b, 0);
+const isWorkoutDone = (log) => !!log && (log.completed || (log.exercises || []).some((e) => e.sets.some((x) => x.done)) || !!(log.cardio && log.cardio.done));
+const workoutsInWeek = (s, ws) => { let n = 0; for (let i = 0; i < 7; i++) if (isWorkoutDone(s.workoutLogs[addDays(ws, i)])) n++; return n; };
+const latestWeight = (s) => { const w = [...s.weights].sort((a, b) => (a.date < b.date ? -1 : 1)); return w.length ? w[w.length - 1].lbs : num(s.profile.startWeight); };
+
+function weekStreak(s, today) {
+  const target = num(s.profile.workoutsPerWeek) || 5;
+  let ws = weekStart(today), streak = 0;
+  if (workoutsInWeek(s, ws) >= target) streak++;
+  ws = addDays(ws, -7);
+  for (let i = 0; i < 104 && workoutsInWeek(s, ws) >= target; i++) { streak++; ws = addDays(ws, -7); }
+  return streak;
+}
+function hydrationStreak(s, today) {
+  const goal = num(s.profile.waterGoal) || 100;
+  let d = waterTotal(s, today) >= goal ? today : addDays(today, -1), n = 0;
+  while (waterTotal(s, d) >= goal && n < 400) { n++; d = addDays(d, -1); }
+  return n;
+}
+
+function calcTargets(profile, lbs) {
+  const kg = lbs * 0.4536, cm = num(profile.heightIn) * 2.54;
+  const bmr = 10 * kg + 6.25 * cm - 5 * num(profile.age) + (profile.sex === 'female' ? -161 : 5);
+  const tdee = bmr * num(profile.activity);
+  const adj = { cut: -450, maintain: 0, 'lean-bulk': 300 }[profile.goal] || 0;
+  const bmi = num(profile.heightIn) ? (lbs / (num(profile.heightIn) ** 2)) * 703 : 0;
+  if (profile.customTargets) {
+    const c = profile.custom;
+    return { bmr: Math.round(bmr), tdee: Math.round(tdee), cal: num(c.cal), p: num(c.p), c: num(c.c), f: num(c.f), bmi, custom: true };
+  }
+  const cal = Math.round((tdee + adj) / 10) * 10;
+  const p = Math.round(lbs * (profile.goal === 'cut' ? 1.1 : 1.0));
+  const f = Math.round((cal * 0.27) / 9);
+  const c = Math.max(0, Math.round((cal - p * 4 - f * 9) / 4));
+  return { bmr: Math.round(bmr), tdee: Math.round(tdee), cal, p, c, f, bmi, custom: false };
+}
+
+function lastPerformance(logs, ex, beforeDate) {
+  const dates = Object.keys(logs).filter((d) => d < beforeDate).sort().reverse();
+  for (const d of dates) {
+    const x = (logs[d].exercises || []).find((y) => y.exId === ex.id || y.name === ex.name);
+    if (x && x.sets.some((s) => s.done)) return { date: d, ...x };
+  }
+  return null;
+}
+function bestBefore(logs, name, beforeDate) {
+  let best = 0;
+  for (const d of Object.keys(logs)) {
+    if (d >= beforeDate) continue;
+    for (const ex of logs[d].exercises || []) {
+      if (ex.name !== name) continue;
+      for (const st of ex.sets) if (st.done) best = Math.max(best, e1rm(num(st.w), num(st.r)));
+    }
+  }
+  return best;
+}
+function suggestion(logs, ex, date) {
+  const last = lastPerformance(logs, ex, date);
+  if (!last) return { weight: ex.weight, reps: ex.repMin, tone: 'neutral', text: `No history yet — start at ${fmtW(ex.weight)} for ${ex.repMin}–${ex.repMax} reps.` };
+  const done = last.sets.filter((s) => s.done);
+  const topW = Math.max(...done.map((s) => num(s.w)));
+  const atTop = done.filter((s) => num(s.w) === topW);
+  const lastStr = atTop.map((s) => s.r).join(' / ');
+  const allMax = atTop.length >= ex.sets && atTop.every((s) => num(s.r) >= ex.repMax);
+  const anyBelow = atTop.some((s) => num(s.r) < ex.repMin);
+  const inc = num(ex.increment) || 5;
+  if (allMax && topW > 0) return { weight: topW + inc, reps: ex.repMin, tone: 'up', text: `Hit ${lastStr} @ ${topW} last time — add ${inc} lb → ${topW + inc} lb.` };
+  if (allMax) return { weight: 0, reps: ex.repMax, tone: 'up', text: `Maxed reps (${lastStr}) — add load or slow the tempo.` };
+  if (anyBelow) return { weight: topW, reps: ex.repMin, tone: 'hold', text: `${lastStr} @ ${fmtW(topW)} — hold the weight and own ${ex.repMin}+ reps first.` };
+  const minR = Math.min(...atTop.map((s) => num(s.r)));
+  return { weight: topW, reps: Math.min(ex.repMax, minR + 1), tone: 'same', text: `${lastStr} @ ${fmtW(topW)} — same weight, beat it by a rep.` };
+}
+
+function draftSession(s, date, dk) {
+  const prog = activeProgram(s);
+  const day = prog.days[dk];
+  return {
+    dayKey: dk, title: day.title, programId: prog.id, completed: false,
+    exercises: day.exercises.map((e) => {
+      const sug = suggestion(s.workoutLogs, e, date);
+      return { exId: e.id, name: e.name, muscle: e.muscle, sets: Array.from({ length: e.sets }, () => ({ w: sug.weight, r: sug.reps, done: false })) };
+    }),
+    cardio: day.type === 'cardio' ? { distance: '', minutes: '', done: false } : undefined,
+  };
+}
+
+function computePRs(logs) {
+  const best = {}, events = [];
+  Object.keys(logs).sort().forEach((d) => {
+    (logs[d].exercises || []).forEach((ex) => {
+      ex.sets.forEach((st) => {
+        if (!st.done) return;
+        const v = e1rm(num(st.w), num(st.r));
+        if (!v) return;
+        const b = best[ex.name];
+        if (!b || v > b.e1 + 0.01) {
+          if (b) events.push({ name: ex.name, date: d, e1: v, w: num(st.w), r: num(st.r) });
+          best[ex.name] = { name: ex.name, e1: v, w: num(st.w), r: num(st.r), date: d, muscle: ex.muscle };
+        }
+      });
+    });
+  });
+  return { best, events };
+}
+
+function sessionStats(log) {
+  let sets = 0, volume = 0;
+  (log?.exercises || []).forEach((e) => e.sets.forEach((s) => { if (s.done) { sets++; volume += num(s.w) * num(s.r); } }));
+  return { sets, volume };
+}
+
+function recommend(s, t, date) {
+  const tot = dayTotals(s, date);
+  const R = { cal: t.cal - tot.cal, p: t.p - tot.p, c: t.c - tot.c, f: t.f - tot.f };
+  if (R.cal < 120 && R.p < 10) return { R, items: [] };
+  const W = { p: 2.2, c: 1, f: 0.8 };
+  const pool = [...s.meals.map((m) => ({ ...m, source: 'Your meal' })), ...FOOD_DB.map((m) => ({ ...m, source: 'Quick add' }))];
+  const items = pool.map((x) => {
+    let benefit = 0, penalty = 0;
+    for (const k of ['p', 'c', 'f']) {
+      const rem = Math.max(0, R[k]);
+      benefit += (W[k] * Math.min(x[k], rem)) / (t[k] || 1);
+      penalty += ((W[k] * Math.max(0, x[k] - rem)) / (t[k] || 1)) * 1.2;
+    }
+    penalty += (Math.max(0, x.cal - Math.max(0, R.cal)) / (t.cal || 1)) * 3;
+    return { ...x, score: benefit - penalty };
+  }).filter((x) => x.score > 0.02).sort((a, b) => b.score - a.score).slice(0, 6).map((x) => {
+    let reason;
+    if (R.p > 5 && x.p >= 10) reason = `Covers ${Math.round(Math.min(x.p, R.p))} g of your ${Math.round(R.p)} g protein gap`;
+    else if (R.c > 5 && x.c >= 15) reason = `Adds ${Math.round(Math.min(x.c, R.c))} g of the ${Math.round(R.c)} g carbs left`;
+    else if (R.f > 3 && x.f >= 8) reason = `Adds ${Math.round(Math.min(x.f, R.f))} g of the ${Math.round(R.f)} g fat left`;
+    else reason = `Light ${x.cal} kcal top-up`;
+    return { ...x, reason };
+  });
+  return { R, items };
+}
+
+/* =========================================================
+   Sample data (so charts render on first open)
+   ========================================================= */
+function buildSample(base) {
+  const s = structuredClone(base);
+  const rnd = mulberry32(1175);
+  const today = todayKey();
+  const prog = activeProgram(s);
+  const DAYS = 42;
+  const pick = (arr) => arr[Math.floor(rnd() * arr.length)];
+
+  for (let i = DAYS; i >= 1; i--) {
+    const date = addDays(today, -i);
+    const dk = dayKeyOf(date);
+    const day = prog.days[dk];
+    if (day.type === 'rest') continue;
+    if (i > 21 && rnd() < 0.08) continue;
+    const progress = 1 - (i - 1) / (DAYS - 1);
+    const exercises = day.exercises.map((e) => {
+      const start = e.weight > 0 ? round5(e.weight * 0.88) : 0;
+      const w = e.weight > 0 ? Math.min(e.weight, round5(start + (e.weight - start) * progress)) : 0;
+      const sets = Array.from({ length: e.sets }, (_, si) => {
+        let r = e.repMin + Math.floor(rnd() * (e.repMax - e.repMin + 1));
+        if (si === e.sets - 1 && rnd() < 0.35) r = Math.max(e.repMin - 1, r - 1);
+        return { w, r, done: true };
+      });
+      return { exId: e.id, name: e.name, muscle: e.muscle, sets };
+    });
+    const log = { dayKey: dk, title: day.title, programId: prog.id, exercises, completed: true };
+    if (day.type === 'cardio') {
+      const mi = +(3 + rnd() * 1.2).toFixed(2);
+      const pace = 9.1 - progress * 0.45 + rnd() * 0.3;
+      log.cardio = { distance: mi, minutes: Math.round(mi * pace), done: true };
+    }
+    s.workoutLogs[date] = log;
+  }
+
+  const startW = 171.6;
+  for (let i = DAYS; i >= 0; i--) {
+    if (i !== 0 && rnd() > 0.72) continue;
+    const trend = startW + (175 - startW) * (1 - i / DAYS);
+    const lbs = i === 0 ? 175 : +(trend + (rnd() - 0.5) * 1.4).toFixed(1);
+    s.weights.push({ date: addDays(today, -i), lbs });
+  }
+
+  const byId = Object.fromEntries(s.meals.map((m) => [m.id, m]));
+  for (let i = 1; i <= 21; i++) {
+    const date = addDays(today, -i);
+    const trained = isWorkoutDone(s.workoutLogs[date]);
+    const ids = [pick(['m-oats', 'm-eggs']), pick(['m-bowl', 'm-sandwich']), pick(['m-pasta', 'm-salmon'])];
+    if (rnd() < 0.6) ids.push(pick(['m-yogurt', 'm-pbbanana']));
+    s.foodLog[date] = ids.map((id) => entryFrom(byId[id]));
+    s.suppLog[date] = {};
+    if (trained || rnd() < 0.5) { s.foodLog[date].push(entryFrom(byId['m-shake'], { auto: 's-shake' })); s.suppLog[date]['s-shake'] = true; }
+    if (rnd() < 0.9) s.suppLog[date]['s-creatine'] = true;
+    if (trained) {
+      s.foodLog[date].push(entryFrom(byId['m-collagen'], { auto: 's-collagen' }));
+      s.suppLog[date]['s-collagen'] = true; s.suppLog[date]['s-preworkout'] = true;
+    }
+    const goal = 100, oz = Math.round(70 + rnd() * 48);
+    const arr = []; let left = oz;
+    while (left > 0) { const v = Math.min(left, pick([12, 16, 20, 24])); arr.push(v); left -= v; }
+    s.water[date] = oz >= goal - 4 && oz < goal ? [...arr, goal - oz] : arr;
+  }
+
+  s.foodLog[today] = [entryFrom(byId['m-oats']), entryFrom(byId['m-bowl'])];
+  s.water[today] = [16, 20, 12];
+  s.suppLog[today] = {};
+  if (prog.days[dayKeyOf(today)].type !== 'rest') {
+    s.foodLog[today].push(entryFrom(byId['m-collagen'], { auto: 's-collagen' }));
+    s.suppLog[today] = { 's-collagen': true, 's-preworkout': true };
+  }
+  s.sample = true;
+  return s;
+}
+
+function loadInitial() {
+  const stored = storage.load();
+  if (stored && stored.version === 1 && Array.isArray(stored.programs) && stored.programs.length) return normalize(stored);
+  return buildSample(defaultState());
+}
+
+/* =========================================================
+   UI primitives
+   ========================================================= */
+const ICONS = {
+  home: <path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" />,
+  dumbbell: <><path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11" /></>,
+  utensils: <><path d="M7 3v7a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2V3M9 12v9" /><path d="M17 21V3c-2 1-3 3.5-3 6.5V13h3" /></>,
+  chart: <><path d="M3 3v18h18" /><path d="m7 15 4-4 3 3 5-6" /></>,
+  droplet: <path d="M12 3s6 6.4 6 11a6 6 0 0 1-12 0c0-4.6 6-11 6-11z" />,
+  check: <path d="m5 12.5 4.5 4.5L19 7" />,
+  plus: <path d="M12 5v14M5 12h14" />,
+  minus: <path d="M5 12h14" />,
+  trash: <><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></>,
+  edit: <path d="M4 20h4L19 9l-4-4L4 16z" />,
+  flame: <path d="M12 3c1 4 5 5.5 5 10a5 5 0 0 1-10 0c0-2.5 1.5-4 2.5-5 .5 2 1.5 3 2.5 3 0-3-1-5 0-8z" />,
+  trophy: <><path d="M8 4h8v5a4 4 0 0 1-8 0z" /><path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8 21h8M9.5 17h5" /></>,
+  sparkle: <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" />,
+  left: <path d="M15 18l-6-6 6-6" />,
+  right: <path d="M9 18l6-6-6-6" />,
+  up: <path d="M12 19V5M5 12l7-7 7 7" />,
+  down: <path d="M12 5v14M5 12l7 7 7-7" />,
+  pill: <><path d="M10.5 3.5a5 5 0 0 1 7 7l-7 7a5 5 0 0 1-7-7z" /><path d="m7 7 7 7" /></>,
+  scale: <><rect x="4" y="4" width="16" height="16" rx="3" /><path d="M9 10a3 3 0 0 1 6 0M12 10l1.5-1.5" /></>,
+  run: <><circle cx="14.5" cy="4.5" r="1.8" /><path d="M8 21l3-6 3 2.5V21M6 12l3-3.5 4 1 2.5 3H19" /></>,
+  moon: <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" />,
+  copy: <><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3" /></>,
+  download: <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />,
+  upload: <path d="M12 20V9M7 14l5-5 5 5M5 4h14" />,
+  user: <><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></>,
+  target: <><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="4" /><circle cx="12" cy="12" r=".8" /></>,
+  calendar: <><rect x="3.5" y="5" width="17" height="15" rx="2" /><path d="M3.5 10h17M8 3v4M16 3v4" /></>,
+  info: <><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></>,
+  x: <path d="M6 6l12 12M18 6 6 18" />,
+};
+const Icon = ({ name, className = 'w-5 h-5', strokeWidth = 1.8 }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">{ICONS[name]}</svg>
+);
+
+const glass = 'bg-slate-900/40 backdrop-blur-xl border border-white/15 rounded-2xl shadow-[inset_0_1px_0_0_rgba(255,255,255,0.10),0_24px_60px_-28px_rgba(0,0,0,0.7)]';
+const btnPrimary = 'inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-400 hover:bg-emerald-300 active:scale-[.98] text-slate-950 font-semibold px-4 py-2.5 text-sm shadow-[0_0_24px_-6px_rgba(52,211,153,0.8)] transition';
+const btnGhost = 'inline-flex items-center justify-center gap-2 rounded-xl bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/15 text-slate-100 px-3 py-2 text-sm transition';
+const btnIcon = 'grid place-items-center w-9 h-9 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition';
+const inputCls = 'w-full rounded-xl bg-slate-950/50 border border-white/10 focus:border-emerald-400/60 focus:ring-2 focus:ring-emerald-400/20 outline-none px-3 py-2 text-sm text-white placeholder:text-slate-500 transition';
+const labelCls = 'block text-xs font-medium text-slate-300 mb-1.5';
+
+function Card({ title, subtitle, icon, action, className = '', bodyClass = 'p-5', children, accent = 'text-emerald-300' }) {
+  return (
+    <section className={`${glass} ${className}`}>
+      {(title || action) && (
+        <header className="flex items-start justify-between gap-3 px-5 pt-5">
+          <div className="flex items-center gap-3 min-w-0">
+            {icon && <span className={`grid place-items-center w-9 h-9 shrink-0 rounded-xl bg-white/5 border border-white/10 ${accent}`}><Icon name={icon} className="w-[18px] h-[18px]" /></span>}
+            <div className="min-w-0">
+              <h2 className="text-[15px] font-semibold text-white leading-tight truncate">{title}</h2>
+              {subtitle && <p className="text-xs text-slate-300/80 mt-0.5">{subtitle}</p>}
+            </div>
+          </div>
+          {action}
+        </header>
+      )}
+      <div className={bodyClass}>{children}</div>
+    </section>
+  );
+}
+
+function Chip({ children, tone = 'slate' }) {
+  const tones = {
+    slate: 'bg-white/5 border-white/10 text-slate-300',
+    emerald: 'bg-emerald-400/10 border-emerald-400/30 text-emerald-300',
+    cyan: 'bg-cyan-400/10 border-cyan-400/30 text-cyan-300',
+    indigo: 'bg-indigo-400/10 border-indigo-400/30 text-indigo-300',
+    amber: 'bg-amber-400/10 border-amber-400/30 text-amber-300',
+  };
+  return <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${tones[tone]}`}>{children}</span>;
+}
+
+function Ring({ value, max, size = 104, stroke = 9, color = '#34d399', track = 'rgba(255,255,255,0.08)', children }) {
+  const r = (size - stroke) / 2, c = 2 * Math.PI * r;
+  const pct = Math.max(0, Math.min(1, max ? value / max : 0));
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90">
+        <circle cx={size / 2} cy={size / 2} r={r} stroke={track} strokeWidth={stroke} fill="none" />
+        <circle cx={size / 2} cy={size / 2} r={r} stroke={color} strokeWidth={stroke} fill="none" strokeLinecap="round"
+          strokeDasharray={c} strokeDashoffset={c * (1 - pct)}
+          style={{ transition: 'stroke-dashoffset .7s cubic-bezier(.2,.8,.2,1)', filter: pct >= 1 ? `drop-shadow(0 0 7px ${color})` : 'none' }} />
+      </svg>
+      <div className="absolute inset-0 grid place-items-center text-center">{children}</div>
+    </div>
+  );
+}
+
+function MacroBar({ label, value, goal, unit = 'g', color = 'bg-emerald-400', glow = 'shadow-[0_0_14px_rgba(52,211,153,.7)]' }) {
+  const pct = goal ? value / goal : 0;
+  const hit = pct >= 0.95 && pct <= 1.1, over = pct > 1.1;
+  const left = Math.round(goal - value);
+  return (
+    <div>
+      <div className="flex items-baseline justify-between gap-2 mb-1.5">
+        <span className="text-xs font-medium text-slate-300">{label}</span>
+        <span className="text-sm tabular-nums">
+          <span className={`font-semibold ${hit ? 'text-emerald-300 glow-emerald' : 'text-white'}`}>{fmtInt(value)}</span>
+          <span className="text-slate-400"> / {fmtInt(goal)}{unit}</span>
+        </span>
+      </div>
+      <div className="h-2 rounded-full bg-white/[0.07] overflow-hidden">
+        <div className={`h-full rounded-full ${over ? 'bg-amber-400' : color} ${hit ? glow : ''}`} style={{ width: `${Math.min(100, pct * 100)}%`, transition: 'width .6s ease' }} />
+      </div>
+      <div className="mt-1 text-[11px] text-slate-400 tabular-nums">
+        {over ? <span className="text-amber-300">{fmtInt(-left)}{unit} over</span> : hit ? <span className="text-emerald-300">Target hit</span> : `${fmtInt(left)}${unit} to go`}
+      </div>
+    </div>
+  );
+}
+
+function Stepper({ value, onChange, step = 1, min = 0, label }) {
+  return (
+    <div className="flex items-center rounded-xl bg-slate-950/50 border border-white/10 overflow-hidden focus-within:border-emerald-400/50">
+      <button type="button" aria-label={`Decrease ${label}`} onClick={() => onChange(Math.max(min, +(num(value) - step).toFixed(2)))}
+        className="w-8 h-10 shrink-0 grid place-items-center text-slate-300 hover:bg-white/10 active:bg-white/15"><Icon name="minus" className="w-3.5 h-3.5" /></button>
+      <input type="number" inputMode="decimal" aria-label={label} value={value}
+        onChange={(e) => onChange(e.target.value === '' ? '' : Number(e.target.value))}
+        onFocus={(e) => e.target.select()}
+        className="flex-1 min-w-0 w-full bg-transparent text-center text-white font-semibold tabular-nums outline-none h-10 text-[15px]" />
+      <button type="button" aria-label={`Increase ${label}`} onClick={() => onChange(+(num(value) + step).toFixed(2))}
+        className="w-8 h-10 shrink-0 grid place-items-center text-slate-300 hover:bg-white/10 active:bg-white/15"><Icon name="plus" className="w-3.5 h-3.5" /></button>
+    </div>
+  );
+}
+
+function ConfirmButton({ onConfirm, children, className, confirmText = 'Tap again to confirm' }) {
+  const [armed, setArmed] = useState(false);
+  useEffect(() => { if (!armed) return; const t = setTimeout(() => setArmed(false), 3000); return () => clearTimeout(t); }, [armed]);
+  return <button type="button" className={`${className} ${armed ? '!border-rose-400/60 !text-rose-200 !bg-rose-500/15' : ''}`} onClick={() => { if (armed) { setArmed(false); onConfirm(); } else setArmed(true); }}>{armed ? confirmText : children}</button>;
+}
+
+function Segmented({ options, value, onChange, size = 'sm' }) {
+  return (
+    <div className="inline-flex rounded-xl bg-slate-950/50 border border-white/10 p-0.5">
+      {options.map((o) => (
+        <button key={o.value} type="button" onClick={() => onChange(o.value)}
+          className={`${size === 'sm' ? 'px-2.5 py-1 text-xs' : 'px-3 py-1.5 text-sm'} rounded-[10px] font-medium transition ${value === o.value ? 'bg-white/10 text-white shadow-[inset_0_1px_0_rgba(255,255,255,.12)]' : 'text-slate-400 hover:text-slate-200'}`}>{o.label}</button>
+      ))}
+    </div>
+  );
+}
+
+function DateNav({ date, setDate, today }) {
+  const isToday = date === today;
+  return (
+    <div className={`${glass} flex items-center gap-1 p-1 !rounded-2xl`}>
+      <button type="button" className={btnIcon + ' !border-0 !bg-transparent hover:!bg-white/10'} aria-label="Previous day" onClick={() => setDate(addDays(date, -1))}><Icon name="left" className="w-4 h-4" /></button>
+      <div className="px-2 text-center min-w-[9.5rem]">
+        <div className="text-sm font-semibold text-white leading-tight">{isToday ? 'Today' : fmtShort(date)}</div>
+        <div className="text-[11px] text-slate-400">{fromKey(date).toLocaleDateString(undefined, { weekday: 'long' })}</div>
+      </div>
+      <button type="button" className={btnIcon + ' !border-0 !bg-transparent hover:!bg-white/10 disabled:opacity-30'} aria-label="Next day" disabled={isToday} onClick={() => setDate(addDays(date, 1))}><Icon name="right" className="w-4 h-4" /></button>
+      {!isToday && <button type="button" className="ml-1 rounded-xl px-2.5 py-1.5 text-xs font-medium text-emerald-300 hover:bg-emerald-400/10" onClick={() => setDate(today)}>Today</button>}
+    </div>
+  );
+}
+
+function ChartTip({ active, payload, label, unit = '', names = {}, colors = {}, fmt }) {
+  if (!active || !payload || !payload.length) return null;
+  return (
+    <div className="rounded-xl bg-slate-900/90 backdrop-blur-xl border border-white/15 px-3 py-2 text-xs shadow-2xl min-w-[150px]">
+      <div className="text-slate-300 mb-1.5 font-medium">{payload[0]?.payload?.tipLabel || label}</div>
+      {payload.filter((p) => p.value != null).map((p) => (
+        <div key={p.dataKey} className="flex items-center gap-2 py-0.5">
+          <span className="w-2 h-2 rounded-full" style={{ background: colors[p.dataKey] || p.payload?.fill || p.color }} />
+          <span className="text-slate-300">{names[p.dataKey] || p.name}</span>
+          <span className="ml-auto pl-3 font-semibold text-white tabular-nums">{fmt ? fmt(p.value, p.dataKey) : p.value}{unit}</span>
+        </div>
+      ))}
+      {payload[0]?.payload?.tipExtra && <div className="mt-1.5 pt-1.5 border-t border-white/10 text-slate-400">{payload[0].payload.tipExtra}</div>}
+    </div>
+  );
+}
+const axisTick = { fill: '#94a3b8', fontSize: 11 };
+
+function Stat({ label, value, unit, sub, tone = 'white', icon }) {
+  const toneCls = { white: 'text-white', emerald: 'text-emerald-300 glow-emerald', cyan: 'text-cyan-300 glow-cyan' }[tone];
+  return (
+    <div className={`${glass} p-4`}>
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-slate-300">{label}</span>
+        {icon && <Icon name={icon} className="w-4 h-4 text-slate-400" />}
+      </div>
+      <div className={`mt-2 text-2xl font-bold tabular-nums tracking-tight ${toneCls}`}>{value}{unit && <span className="text-sm font-medium text-slate-400 ml-1">{unit}</span>}</div>
+      {sub && <div className="mt-1 text-xs text-slate-400">{sub}</div>}
+    </div>
+  );
+}
+
+/* =========================================================
+   TODAY
+   ========================================================= */
+function TodayView({ state, update, toast, go, targets, today, toggleSupp, addWater, addFood }) {
+  const prog = activeProgram(state);
+  const log = state.workoutLogs[today];
+  const dk = log?.dayKey || dayKeyOf(today);
+  const plan = prog.days[dk];
+  const tot = dayTotals(state, today);
+  const water = waterTotal(state, today);
+  const goalW = num(state.profile.waterGoal) || 100;
+  const weekCount = workoutsInWeek(state, weekStart(today));
+  const streak = weekStreak(state, today);
+  const hydra = hydrationStreak(state, today);
+  const { R, items } = recommend(state, targets, today);
+  const st = sessionStats(log);
+  const totalSets = (log?.exercises || plan.exercises).reduce((a, e) => a + (Array.isArray(e.sets) ? e.sets.length : e.sets), 0);
+  const hour = new Date().getHours();
+  const greet = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  const lw = latestWeight(state);
+  const supps = state.supplements;
+  const suppDone = supps.filter((sp) => state.suppLog[today]?.[sp.id]).length;
+  const sortedW = [...state.weights].sort((a, b) => (a.date < b.date ? -1 : 1)).slice(-21);
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
+        <div>
+          <p className="text-sm text-slate-300">{fmtLong(today)}</p>
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mt-1">{greet}, {state.profile.name || 'there'}.</h1>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <Chip tone={streak > 0 ? 'emerald' : 'slate'}><Icon name="flame" className="w-3.5 h-3.5" /> {streak}-week training streak</Chip>
+          <Chip tone={hydra > 0 ? 'cyan' : 'slate'}><Icon name="droplet" className="w-3.5 h-3.5" /> {hydra}-day hydration streak</Chip>
+        </div>
+      </div>
+
+      <div className="grid lg:grid-cols-3 gap-5">
+        {/* Today's training */}
+        <Card className="lg:col-span-2" title="Today’s training" subtitle={`${prog.name}`} icon={plan.type === 'cardio' ? 'run' : plan.type === 'rest' ? 'moon' : 'dumbbell'}
+          action={<button className={btnGhost} onClick={() => go('workouts')}>{plan.type === 'rest' ? 'Open log' : log ? 'Continue' : 'Start'} <Icon name="right" className="w-4 h-4" /></button>}>
+          <div className="flex flex-col sm:flex-row gap-5 sm:items-center">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-2xl font-bold tracking-tight">{plan.title}</span>
+                <Chip tone={plan.type === 'cardio' ? 'cyan' : plan.type === 'rest' ? 'indigo' : 'emerald'}>{plan.focus || plan.type}</Chip>
+                {log?.completed && <Chip tone="emerald"><Icon name="check" className="w-3 h-3" /> Complete</Chip>}
+              </div>
+              {plan.type === 'rest' ? (
+                <p className="text-sm text-slate-300 mt-2">Recovery day. A 20–30 min walk, some hip and t-spine mobility, and 7–9 hours of sleep are what make Friday’s session productive.</p>
+              ) : (
+                <ul className="mt-3 grid sm:grid-cols-2 gap-x-6 gap-y-1.5">
+                  {plan.cardioTarget && <li className="text-sm text-cyan-200 flex gap-2"><Icon name="run" className="w-4 h-4 mt-0.5 shrink-0" />{plan.cardioTarget}</li>}
+                  {plan.exercises.map((e) => {
+                    const sug = suggestion(state.workoutLogs, e, today);
+                    return (
+                      <li key={e.id} className="text-sm flex items-baseline justify-between gap-3 border-b border-white/5 pb-1.5">
+                        <span className="text-slate-200 truncate">{e.name}</span>
+                        <span className={`tabular-nums text-xs shrink-0 ${sug.tone === 'up' ? 'text-emerald-300' : 'text-slate-400'}`}>
+                          {e.sets}×{e.repMin}–{e.repMax} · {fmtW(sug.weight)}{sug.tone === 'up' && ' ↑'}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+            {plan.type !== 'rest' && (
+              <Ring value={st.sets} max={totalSets || 1} color="#34d399">
+                <div><div className="text-xl font-bold tabular-nums">{st.sets}<span className="text-slate-400 text-sm">/{totalSets}</span></div><div className="text-[11px] text-slate-400">sets done</div></div>
+              </Ring>
+            )}
+          </div>
+        </Card>
+
+        {/* Week */}
+        <Card title="This week" subtitle={`Goal: ${state.profile.workoutsPerWeek} sessions`} icon="calendar" accent="text-cyan-300">
+          <div className="flex items-center gap-5">
+            <Ring value={weekCount} max={num(state.profile.workoutsPerWeek) || 5} color="#22d3ee">
+              <div><div className="text-2xl font-bold tabular-nums">{weekCount}<span className="text-slate-400 text-base">/{state.profile.workoutsPerWeek}</span></div><div className="text-[11px] text-slate-400">sessions</div></div>
+            </Ring>
+            <div className="grid grid-cols-7 gap-1.5 flex-1">
+              {DAY_KEYS.map((k, i) => {
+                const d = addDays(weekStart(today), i);
+                const done = isWorkoutDone(state.workoutLogs[d]);
+                const type = prog.days[k].type;
+                return (
+                  <div key={k} className="text-center">
+                    <div className={`h-9 rounded-lg border grid place-items-center ${done ? (type === 'cardio' ? 'bg-cyan-400/25 border-cyan-300/50 shadow-[0_0_12px_rgba(34,211,238,.35)]' : 'bg-emerald-400/25 border-emerald-300/50 shadow-[0_0_12px_rgba(52,211,153,.35)]') : d === today ? 'border-white/40 bg-white/5' : 'border-white/10 bg-white/[0.03]'}`}>
+                      {done ? <Icon name="check" className="w-3.5 h-3.5 text-white" /> : type === 'rest' ? <span className="text-[10px] text-slate-500">—</span> : null}
+                    </div>
+                    <div className={`text-[10px] mt-1 ${d === today ? 'text-white font-semibold' : 'text-slate-400'}`}>{k[0]}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        {/* Water */}
+        <Card title="Water" subtitle={`${goalW} oz daily goal`} icon="droplet" accent="text-cyan-300">
+          <div className="flex items-center gap-4">
+            <Ring value={water} max={goalW} color="#22d3ee" size={96}>
+              <div><div className={`text-xl font-bold tabular-nums ${water >= goalW ? 'text-cyan-300 glow-cyan' : ''}`}>{water}</div><div className="text-[11px] text-slate-400">of {goalW} oz</div></div>
+            </Ring>
+            <div className="grid grid-cols-2 gap-1.5 flex-1">
+              {[8, 16, 20, 32].map((oz) => <button key={oz} className={btnGhost + ' !px-2 !py-1.5 text-xs'} onClick={() => addWater(today, oz)}>+{oz}</button>)}
+            </div>
+          </div>
+        </Card>
+
+        {/* Protein + calories */}
+        <Card title="Fuel" subtitle={`${fmtInt(Math.max(0, R.cal))} kcal left today`} icon="flame">
+          <div className="space-y-3">
+            <MacroBar label="Protein" value={tot.p} goal={targets.p} />
+            <MacroBar label="Calories" value={tot.cal} goal={targets.cal} unit="" color="bg-cyan-400" glow="shadow-[0_0_14px_rgba(34,211,238,.7)]" />
+          </div>
+        </Card>
+
+        {/* Supplements */}
+        <Card title="Supplements" subtitle={`${suppDone} of ${supps.length} taken`} icon="pill" accent="text-indigo-300">
+          <div className="space-y-1.5">
+            {supps.map((sp) => <SuppToggle key={sp.id} sp={sp} on={!!state.suppLog[today]?.[sp.id]} onToggle={() => toggleSupp(today, sp)} compact />)}
+          </div>
+        </Card>
+
+        {/* Weight */}
+        <Card title="Body weight" subtitle={`${sortedW.length ? 'Last ' + fmtShort(sortedW[sortedW.length - 1].date) : 'Starting weight'}`} icon="scale">
+          <div className="text-3xl font-bold tabular-nums">{lw}<span className="text-sm text-slate-400 ml-1 font-medium">lb</span></div>
+          <div className="h-14 -mx-1 mt-1">
+            {sortedW.length > 1 && (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={sortedW} margin={{ top: 4, right: 4, left: 4, bottom: 4 }}>
+                  <YAxis hide domain={['dataMin - 0.5', 'dataMax + 0.5']} />
+                  <Line type="monotone" dataKey="lbs" stroke="#34d399" strokeWidth={2} dot={false} isAnimationActive={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+          <QuickWeight state={state} update={update} toast={toast} today={today} />
+        </Card>
+      </div>
+
+      <Recommendations items={items.slice(0, 4)} R={R} targets={targets} onAdd={(x) => addFood(today, x)} />
+    </div>
+  );
+}
+
+function QuickWeight({ state, update, toast, today }) {
+  const [v, setV] = useState('');
+  const save = (e) => {
+    e.preventDefault();
+    const lbs = Number(v);
+    if (!lbs || lbs < 60 || lbs > 500) return;
+    update((s) => { s.weights = s.weights.filter((w) => w.date !== today); s.weights.push({ date: today, lbs }); });
+    setV(''); toast(`Logged ${lbs} lb for today`, 'good');
+  };
+  return (
+    <form onSubmit={save} className="flex gap-2 mt-2">
+      <input className={inputCls + ' !py-1.5'} type="number" step="0.1" inputMode="decimal" placeholder="Today’s weigh-in" value={v} onChange={(e) => setV(e.target.value)} aria-label="Today's weight in pounds" />
+      <button className={btnGhost + ' !py-1.5'} type="submit">Log</button>
+    </form>
+  );
+}
+
+/* =========================================================
+   WORKOUTS
+   ========================================================= */
+function WorkoutsView({ state, update, toast, today }) {
+  const [date, setDate] = useState(today);
+  const [edit, setEdit] = useState(false);
+  const [dayOverride, setDayOverride] = useState(null);
+  const [extraName, setExtraName] = useState('');
+  useEffect(() => setDayOverride(null), [date]);
+
+  const prog = activeProgram(state);
+  const existing = state.workoutLogs[date];
+  const dk = dayOverride || existing?.dayKey || dayKeyOf(date);
+  const plan = prog.days[dk];
+  const session = existing && existing.dayKey === dk ? existing : draftSession(state, date, dk);
+  const logged = !!(existing && existing.dayKey === dk);
+  const ws = weekStart(date);
+
+  const mutate = (fn) => update((s) => {
+    let log = s.workoutLogs[date];
+    if (!log || log.dayKey !== dk) { log = draftSession(s, date, dk); s.workoutLogs[date] = log; }
+    fn(log, s);
+  });
+
+  const toggleSet = (i, j) => {
+    const ex = session.exercises[i], st = ex.sets[j], willDone = !st.done;
+    mutate((log) => { log.exercises[i].sets[j].done = willDone; });
+    if (willDone) {
+      const best = bestBefore(state.workoutLogs, ex.name, date);
+      const v = e1rm(num(st.w), num(st.r));
+      if (best > 0 && v > best + 0.01) toast(`New PR · ${ex.name} ${num(st.w)} × ${num(st.r)} (est. 1RM ${Math.round(v)})`, 'pr');
+    }
+  };
+
+  const complete = () => {
+    mutate((log) => { log.completed = true; log.completedAt = Date.now(); });
+    const s = sessionStats(session);
+    toast(`${plan.title} logged · ${s.sets} sets, ${fmtInt(s.volume)} lb moved`, 'good');
+  };
+
+  const allSets = session.exercises.reduce((a, e) => a + e.sets.length, 0);
+  const doneSets = session.exercises.reduce((a, e) => a + e.sets.filter((x) => x.done).length, 0);
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Workouts</h1>
+          <p className="text-sm text-slate-300 mt-1">Log sets as you go — weights pre-fill from your last session with the next progression.</p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {!edit && <DateNav date={date} setDate={setDate} today={today} />}
+          <button className={edit ? btnPrimary : btnGhost} onClick={() => setEdit(!edit)}><Icon name={edit ? 'check' : 'edit'} className="w-4 h-4" />{edit ? 'Done editing' : 'Edit program'}</button>
+        </div>
+      </div>
+
+      <ProgramBar state={state} update={update} toast={toast} edit={edit} />
+
+      {/* Week strip */}
+      <div className="flex gap-2 overflow-x-auto scrollbar-none -mx-1 px-1 pb-1">
+        {DAY_KEYS.map((k, i) => {
+          const d = addDays(ws, i);
+          const day = prog.days[k];
+          const sel = k === dk;
+          const done = isWorkoutDone(state.workoutLogs[d]);
+          return (
+            <button key={k} onClick={() => setDayOverride(k)}
+              className={`shrink-0 w-[7.5rem] text-left rounded-2xl border px-3 py-2.5 backdrop-blur-xl transition ${sel ? 'bg-white/10 border-emerald-300/50 shadow-[0_0_20px_-6px_rgba(52,211,153,.6)]' : 'bg-slate-900/40 border-white/10 hover:border-white/25'}`}>
+              <div className="flex items-center justify-between">
+                <span className={`text-[11px] font-semibold uppercase tracking-wider ${k === dayKeyOf(today) ? 'text-emerald-300' : 'text-slate-400'}`}>{k}</span>
+                {done && !edit && <span className="w-4 h-4 rounded-full bg-emerald-400/90 grid place-items-center"><Icon name="check" className="w-2.5 h-2.5 text-slate-950" strokeWidth={3} /></span>}
+              </div>
+              <div className="text-sm font-semibold text-white truncate mt-0.5">{day.title}</div>
+              <div className="text-[11px] text-slate-400 truncate">{day.type === 'rest' ? 'Rest' : day.type === 'cardio' ? 'Cardio' : `${day.exercises.length} lifts`}</div>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="grid lg:grid-cols-3 gap-5 items-start">
+        <div className="lg:col-span-2 space-y-4">
+          {edit ? (
+            <DayEditor prog={prog} dk={dk} update={update} />
+          ) : plan.type === 'rest' && !logged ? (
+            <Card title={`${DAY_NAMES[dk]} · Rest day`} icon="moon" accent="text-indigo-300">
+              <p className="text-sm text-slate-300">Muscle grows between sessions, not during them. Today: an easy 20–30 min walk, 10 min of hip/ankle/t-spine mobility, and hit your protein and water anyway.</p>
+              <p className="text-sm text-slate-400 mt-3">Training today instead? Pick a day above to log it on {fmtShort(date)}.</p>
+            </Card>
+          ) : (
+            <>
+              <div className={`${glass} p-4 flex flex-wrap items-center justify-between gap-3 ${session.completed ? 'pulse-glow' : ''}`}>
+                <div>
+                  <div className="text-xs text-slate-300">{fmtLong(date)}</div>
+                  <div className="text-lg font-bold">{plan.title} <span className="text-slate-400 font-medium text-sm">· {plan.focus}</span></div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <div className={`text-lg font-bold tabular-nums ${doneSets === allSets && allSets ? 'text-emerald-300 glow-emerald' : ''}`}>{doneSets}/{allSets}</div>
+                    <div className="text-[11px] text-slate-400">sets</div>
+                  </div>
+                  {session.completed
+                    ? <Chip tone="emerald"><Icon name="check" className="w-3 h-3" /> Completed</Chip>
+                    : <button className={btnPrimary} onClick={complete}><Icon name="check" className="w-4 h-4" />Finish workout</button>}
+                </div>
+              </div>
+
+              {plan.type === 'cardio' && session.cardio && (
+                <CardioBlock cardio={session.cardio} target={plan.cardioTarget} onChange={(patch) => mutate((log) => { log.cardio = { ...(log.cardio || {}), ...patch }; })} onDone={() => { const on = !session.cardio.done; mutate((log) => { log.cardio = { ...(log.cardio || {}), done: on }; }); if (on) toast('Run logged — nice work', 'good'); }} />
+              )}
+
+              {session.exercises.map((ex, i) => {
+                const planEx = plan.exercises.find((p) => p.id === ex.exId);
+                const ref = planEx || { id: ex.exId, name: ex.name };
+                return (
+                  <ExerciseCard key={ex.exId + i} ex={ex} idx={i} planEx={planEx}
+                    last={lastPerformance(state.workoutLogs, ref, date)}
+                    sug={planEx ? suggestion(state.workoutLogs, planEx, date) : null}
+                    best={bestBefore(state.workoutLogs, ex.name, date)}
+                    onSet={(j, field, v) => mutate((log) => { log.exercises[i].sets[j][field] = v; })}
+                    onToggle={(j) => toggleSet(i, j)}
+                    onAddSet={() => mutate((log) => { const sets = log.exercises[i].sets; const lastSet = sets[sets.length - 1] || { w: 0, r: 8 }; sets.push({ w: lastSet.w, r: lastSet.r, done: false }); })}
+                    onRemoveSet={() => mutate((log) => { if (log.exercises[i].sets.length > 1) log.exercises[i].sets.pop(); })}
+                    onRemove={!planEx ? () => mutate((log) => { log.exercises.splice(i, 1); }) : null}
+                  />
+                );
+              })}
+
+              <div className={`${glass} p-4 flex flex-col sm:flex-row gap-2`}>
+                <input className={inputCls} placeholder="Add an extra exercise to this session…" value={extraName} onChange={(e) => setExtraName(e.target.value)} list="exercise-list" />
+                <button className={btnGhost} onClick={() => { if (!extraName.trim()) return; mutate((log) => { log.exercises.push({ exId: 'x-' + uid(), name: extraName.trim(), muscle: 'Other', sets: [0, 1, 2].map(() => ({ w: 0, r: 10, done: false })) }); }); setExtraName(''); }}><Icon name="plus" className="w-4 h-4" />Add</button>
+                {logged && <ConfirmButton className={btnGhost} onConfirm={() => update((s) => { delete s.workoutLogs[date]; })} confirmText="Tap to reset">Reset to plan</ConfirmButton>}
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="space-y-5">
+          <VolumePanel prog={prog} />
+          <PrinciplesCard />
+        </div>
+      </div>
+      <datalist id="exercise-list">
+        {['Back Squat', 'Front Squat', 'Hack Squat', 'Leg Press', 'Romanian Deadlift', 'Conventional Deadlift', 'Barbell Hip Thrust', 'Bulgarian Split Squat', 'Walking Lunge', 'Leg Extension', 'Seated Leg Curl', 'Lying Leg Curl', 'Standing Calf Raise', 'Seated Calf Raise', 'Barbell Bench Press', 'Incline Barbell Bench', 'Incline Dumbbell Press', 'Dumbbell Bench Press', 'Weighted Dip', 'Cable Fly (low to high)', 'Pec Deck', 'Machine Chest Press', 'Push-Up', 'Overhead Press', 'Seated DB Shoulder Press', 'Lateral Raise', 'Rear Delt Fly', 'Face Pull', 'Pull-Up', 'Lat Pulldown', 'Barbell Row', 'Seated Cable Row', 'Chest-Supported DB Row', 'EZ-Bar Curl', 'Hammer Curl', 'Rope Triceps Pushdown', 'Overhead Triceps Extension', 'Hanging Leg Raise', 'Cable Crunch', 'Plank'].map((n) => <option key={n} value={n} />)}
+      </datalist>
+    </div>
+  );
+}
+
+function ExerciseCard({ ex, idx, planEx, last, sug, best, onSet, onToggle, onAddSet, onRemoveSet, onRemove }) {
+  const inc = num(planEx?.increment) || 5;
+  const doneCount = ex.sets.filter((s) => s.done).length;
+  const allDone = doneCount === ex.sets.length && ex.sets.length > 0;
+  const toneCls = { up: 'border-emerald-400/30 bg-emerald-400/[0.07] text-emerald-200', hold: 'border-amber-400/25 bg-amber-400/[0.06] text-amber-200', same: 'border-cyan-400/25 bg-cyan-400/[0.06] text-cyan-100', neutral: 'border-white/10 bg-white/[0.03] text-slate-300' };
+  return (
+    <div className={`${glass} p-4 sm:p-5 transition ${allDone ? '!border-emerald-300/40' : ''}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-slate-500 tabular-nums font-semibold">{pad(idx + 1)}</span>
+            <h3 className="font-semibold text-white">{ex.name}</h3>
+            <Chip tone={PRIORITY.includes(ex.muscle) ? 'emerald' : 'slate'}>{ex.muscle}</Chip>
+          </div>
+          {planEx && <p className="text-sm text-slate-300 mt-1">{planEx.sets} × {planEx.repMin}–{planEx.repMax} reps{planEx.notes && <span className="text-slate-400"> · {planEx.notes}</span>}</p>}
+        </div>
+        <div className="flex items-start gap-2 shrink-0">
+          <div className="text-right">
+            <div className={`text-sm font-semibold tabular-nums ${allDone ? 'text-emerald-300 glow-emerald' : 'text-slate-300'}`}>{doneCount}/{ex.sets.length}</div>
+            <div className="text-[11px] text-slate-400">sets</div>
+          </div>
+          {onRemove && <button className={btnIcon + ' !w-8 !h-8'} aria-label="Remove exercise" onClick={onRemove}><Icon name="x" className="w-4 h-4" /></button>}
+        </div>
+      </div>
+
+      {sug && (
+        <div className={`mt-3 flex items-start gap-2 text-xs rounded-xl px-3 py-2 border ${toneCls[sug.tone]}`}>
+          <Icon name={sug.tone === 'up' ? 'up' : sug.tone === 'hold' ? 'target' : 'sparkle'} className="w-3.5 h-3.5 mt-px shrink-0" />
+          <span>{sug.text}</span>
+        </div>
+      )}
+
+      <div className="mt-3 space-y-2">
+        <div className="grid grid-cols-[1.5rem_1fr_1fr_2.75rem] gap-2 text-[10px] uppercase tracking-wider text-slate-400 font-semibold px-0.5">
+          <span>Set</span><span className="text-center">Weight · lb</span><span className="text-center">Reps</span><span className="text-center">Done</span>
+        </div>
+        {ex.sets.map((s, j) => {
+          const v = e1rm(num(s.w), num(s.r));
+          const pr = s.done && best > 0 && v > best + 0.01;
+          return (
+            <div key={j} className={`grid grid-cols-[1.5rem_1fr_1fr_2.75rem] gap-2 items-center rounded-xl ${s.done ? 'opacity-100' : ''}`}>
+              <div className="relative text-center">
+                <span className={`text-sm font-semibold tabular-nums ${s.done ? 'text-emerald-300' : 'text-slate-400'}`}>{j + 1}</span>
+              </div>
+              <Stepper label={`set ${j + 1} weight`} value={s.w} step={inc} onChange={(v2) => onSet(j, 'w', v2)} />
+              <Stepper label={`set ${j + 1} reps`} value={s.r} step={1} onChange={(v2) => onSet(j, 'r', v2)} />
+              <button aria-label={s.done ? `Mark set ${j + 1} not done` : `Mark set ${j + 1} done`} onClick={() => onToggle(j)}
+                className={`relative h-10 rounded-xl border grid place-items-center transition ${s.done ? 'bg-emerald-400 border-emerald-300 text-slate-950 shadow-[0_0_18px_-2px_rgba(52,211,153,.75)]' : 'bg-white/5 border-white/15 text-slate-400 hover:text-white hover:bg-white/10'}`}>
+                <Icon name="check" className="w-5 h-5" strokeWidth={2.6} />
+                {pr && <span className="absolute -top-2 -right-1.5 rounded-full bg-cyan-300 text-slate-950 text-[9px] font-extrabold px-1.5 py-px shadow-[0_0_12px_rgba(34,211,238,.9)]">PR</span>}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-3 flex items-center justify-between gap-2 flex-wrap">
+        <div className="text-xs text-slate-400 min-w-0">
+          {last ? <>Last ({fmtShort(last.date)}): <span className="text-slate-300 tabular-nums">{last.sets.filter((s) => s.done).map((s) => `${num(s.w) || 'BW'}×${s.r}`).join(', ')}</span></> : 'No previous session logged'}
+          {best > 0 && <span className="ml-2 text-cyan-300/90">· best est. 1RM {Math.round(best)}</span>}
+        </div>
+        <div className="flex gap-1.5">
+          <button className={btnGhost + ' !px-2.5 !py-1 text-xs'} onClick={onRemoveSet} disabled={ex.sets.length <= 1}><Icon name="minus" className="w-3.5 h-3.5" />Set</button>
+          <button className={btnGhost + ' !px-2.5 !py-1 text-xs'} onClick={onAddSet}><Icon name="plus" className="w-3.5 h-3.5" />Set</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CardioBlock({ cardio, target, onChange, onDone }) {
+  const dist = num(cardio.distance), mins = num(cardio.minutes);
+  let paceStr = '—';
+  if (dist > 0 && mins > 0) { const sec = Math.round((mins / dist) * 60); paceStr = `${Math.floor(sec / 60)}:${pad(sec % 60)}`; }
+  return (
+    <div className={`${glass} p-4 sm:p-5 ${cardio.done ? '!border-cyan-300/40' : ''}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span className="grid place-items-center w-9 h-9 rounded-xl bg-cyan-400/10 border border-cyan-300/30 text-cyan-300"><Icon name="run" className="w-[18px] h-[18px]" /></span>
+          <div>
+            <h3 className="font-semibold">Run</h3>
+            <p className="text-xs text-slate-300">{target}</p>
+          </div>
+        </div>
+        <button onClick={onDone} className={`h-10 px-3 rounded-xl border text-sm font-semibold flex items-center gap-1.5 transition ${cardio.done ? 'bg-cyan-300 border-cyan-200 text-slate-950 shadow-[0_0_18px_-2px_rgba(34,211,238,.8)]' : 'bg-white/5 border-white/15 text-slate-300 hover:bg-white/10'}`}><Icon name="check" className="w-4 h-4" strokeWidth={2.6} />{cardio.done ? 'Done' : 'Mark done'}</button>
+      </div>
+      <div className="grid grid-cols-3 gap-3 mt-4">
+        <div><label className={labelCls}>Distance (mi)</label><Stepper label="distance" value={cardio.distance} step={0.25} onChange={(v) => onChange({ distance: v })} /></div>
+        <div><label className={labelCls}>Time (min)</label><Stepper label="minutes" value={cardio.minutes} step={1} onChange={(v) => onChange({ minutes: v })} /></div>
+        <div><label className={labelCls}>Pace</label><div className="h-10 rounded-xl bg-white/[0.03] border border-white/10 grid place-items-center font-semibold tabular-nums text-cyan-200">{paceStr}<span className="sr-only"> per mile</span></div></div>
+      </div>
+    </div>
+  );
+}
+
+function ProgramBar({ state, update, toast, edit }) {
+  const prog = activeProgram(state);
+  return (
+    <div className={`${glass} p-3 flex flex-col sm:flex-row sm:items-center gap-3`}>
+      <div className="flex items-center gap-2 min-w-0 flex-1">
+        <span className="text-xs font-medium text-slate-300 shrink-0 pl-1">Program</span>
+        {edit ? (
+          <input className={inputCls} value={prog.name} onChange={(e) => update((s) => { activeProgram(s).name = e.target.value; })} aria-label="Program name" />
+        ) : (
+          <select className={inputCls + ' sm:max-w-sm'} value={prog.id} onChange={(e) => update((s) => { s.activeProgramId = e.target.value; })} aria-label="Active program">
+            {state.programs.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        )}
+      </div>
+      {edit && (
+        <div className="flex gap-2 shrink-0">
+          <button className={btnGhost} onClick={() => { update((s) => { const copy = structuredClone(activeProgram(s)); copy.id = 'prog-' + uid(); copy.name = copy.name + ' (copy)'; DAY_KEYS.forEach((k) => copy.days[k].exercises.forEach((e) => { e.id = uid(); })); s.programs.push(copy); s.activeProgramId = copy.id; }); toast('Program duplicated', 'info'); }}><Icon name="copy" className="w-4 h-4" />Duplicate</button>
+          <button className={btnGhost} onClick={() => { update((s) => { const p = { id: 'prog-' + uid(), name: 'New program', notes: '', days: {} }; DAY_KEYS.forEach((k) => { p.days[k] = { title: 'Rest', focus: 'Recover', type: 'rest', exercises: [] }; }); s.programs.push(p); s.activeProgramId = p.id; }); }}><Icon name="plus" className="w-4 h-4" />Blank</button>
+          {state.programs.length > 1 && <ConfirmButton className={btnGhost} onConfirm={() => update((s) => { s.programs = s.programs.filter((p) => p.id !== s.activeProgramId); s.activeProgramId = s.programs[0].id; })} confirmText="Delete?"><Icon name="trash" className="w-4 h-4" /></ConfirmButton>}
+        </div>
+      )}
+      {!edit && prog.notes && <p className="text-xs text-slate-400 sm:max-w-md">{prog.notes}</p>}
+    </div>
+  );
+}
+
+function DayEditor({ prog, dk, update }) {
+  const day = prog.days[dk];
+  const setDay = (fn) => update((s) => { const p = s.programs.find((x) => x.id === prog.id); fn(p.days[dk], p); });
+  const setEx = (i, field, v) => setDay((d) => { d.exercises[i][field] = v; });
+  const move = (i, dir) => setDay((d) => { const j = i + dir; if (j < 0 || j >= d.exercises.length) return; [d.exercises[i], d.exercises[j]] = [d.exercises[j], d.exercises[i]]; });
+  const n = (v) => (v === '' ? '' : Number(v));
+  return (
+    <Card title={`Edit ${DAY_NAMES[dk]}`} subtitle="Changes apply to future sessions; logged days keep what you did." icon="edit">
+      <div className="grid sm:grid-cols-3 gap-3">
+        <div><label className={labelCls}>Day title</label><input className={inputCls} value={day.title} onChange={(e) => setDay((d) => { d.title = e.target.value; })} /></div>
+        <div><label className={labelCls}>Focus</label><input className={inputCls} value={day.focus || ''} onChange={(e) => setDay((d) => { d.focus = e.target.value; })} /></div>
+        <div><label className={labelCls}>Type</label>
+          <select className={inputCls} value={day.type} onChange={(e) => setDay((d) => { d.type = e.target.value; if (e.target.value === 'cardio' && !d.cardioTarget) d.cardioTarget = '3 mi easy run'; })}>
+            <option value="strength">Strength</option><option value="cardio">Cardio + lifts</option><option value="rest">Rest</option>
+          </select>
+        </div>
+        {day.type === 'cardio' && <div className="sm:col-span-3"><label className={labelCls}>Cardio target</label><input className={inputCls} value={day.cardioTarget || ''} onChange={(e) => setDay((d) => { d.cardioTarget = e.target.value; })} /></div>}
+      </div>
+
+      {day.type !== 'rest' && (
+        <div className="mt-5 space-y-3">
+          {day.exercises.map((e, i) => (
+            <div key={e.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+              <div className="flex gap-2 items-center">
+                <span className="text-xs text-slate-500 font-semibold tabular-nums w-5">{pad(i + 1)}</span>
+                <input className={inputCls + ' font-semibold'} value={e.name} list="exercise-list" onChange={(ev) => setEx(i, 'name', ev.target.value)} aria-label="Exercise name" />
+                <button className={btnIcon} aria-label="Move up" onClick={() => move(i, -1)}><Icon name="up" className="w-4 h-4" /></button>
+                <button className={btnIcon} aria-label="Move down" onClick={() => move(i, 1)}><Icon name="down" className="w-4 h-4" /></button>
+                <ConfirmButton className={btnIcon} confirmText="✕?" onConfirm={() => setDay((d) => { d.exercises.splice(i, 1); })}><Icon name="trash" className="w-4 h-4" /></ConfirmButton>
+              </div>
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mt-2">
+                <div><label className={labelCls}>Muscle</label><select className={inputCls} value={e.muscle} onChange={(ev) => setEx(i, 'muscle', ev.target.value)}>{MUSCLES.map((m) => <option key={m}>{m}</option>)}</select></div>
+                <div><label className={labelCls}>Sets</label><input type="number" className={inputCls} value={e.sets} onChange={(ev) => setEx(i, 'sets', Math.max(1, num(ev.target.value)) )} /></div>
+                <div><label className={labelCls}>Rep min</label><input type="number" className={inputCls} value={e.repMin} onChange={(ev) => setEx(i, 'repMin', n(ev.target.value))} /></div>
+                <div><label className={labelCls}>Rep max</label><input type="number" className={inputCls} value={e.repMax} onChange={(ev) => setEx(i, 'repMax', n(ev.target.value))} /></div>
+                <div><label className={labelCls}>Start lb</label><input type="number" className={inputCls} value={e.weight} onChange={(ev) => setEx(i, 'weight', n(ev.target.value))} /></div>
+                <div><label className={labelCls}>+ Step lb</label><input type="number" className={inputCls} value={e.increment} onChange={(ev) => setEx(i, 'increment', n(ev.target.value))} /></div>
+              </div>
+              <input className={inputCls + ' mt-2'} placeholder="Notes (cues, rest time, per-hand…)" value={e.notes || ''} onChange={(ev) => setEx(i, 'notes', ev.target.value)} />
+            </div>
+          ))}
+          <button className={btnGhost + ' w-full'} onClick={() => setDay((d) => { d.exercises.push(mk('New exercise', 'Chest', 3, 8, 12, 0, 5)); })}><Icon name="plus" className="w-4 h-4" />Add exercise</button>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function VolumePanel({ prog }) {
+  const counts = {};
+  DAY_KEYS.forEach((k) => prog.days[k].type !== 'rest' && prog.days[k].exercises.forEach((e) => { counts[e.muscle] = (counts[e.muscle] || 0) + num(e.sets); }));
+  const rows = Object.entries(counts).sort((a, b) => (PRIORITY.includes(b[0]) - PRIORITY.includes(a[0])) || b[1] - a[1]);
+  const max = 24;
+  return (
+    <Card title="Weekly sets per muscle" subtitle="Shaded band = 10–20 hard sets, the growth range" icon="target">
+      <div className="space-y-2.5">
+        {rows.map(([m, n]) => {
+          const pri = PRIORITY.includes(m);
+          const inBand = n >= 10 && n <= 20;
+          return (
+            <div key={m} className="grid grid-cols-[5.5rem_1fr_2rem] items-center gap-2">
+              <span className={`text-xs ${pri ? 'text-white font-medium' : 'text-slate-300'}`}>{m}</span>
+              <div className="relative h-2.5 rounded-full bg-white/[0.06] overflow-hidden">
+                <div className="absolute inset-y-0 bg-white/[0.08]" style={{ left: `${(10 / max) * 100}%`, width: `${(10 / max) * 100}%` }} />
+                <div className={`absolute inset-y-0 left-0 rounded-full ${pri ? (inBand ? 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,.7)]' : 'bg-emerald-400/60') : 'bg-slate-400/60'}`} style={{ width: `${Math.min(100, (n / max) * 100)}%` }} />
+              </div>
+              <span className={`text-xs tabular-nums text-right ${pri && inBand ? 'text-emerald-300' : 'text-slate-300'}`}>{n}</span>
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-[11px] text-slate-400 mt-3">Priority muscles in bright emerald. Others sit lower on purpose so recovery goes to legs and chest.</p>
+    </Card>
+  );
+}
+
+function PrinciplesCard() {
+  const items = [
+    ['Frequency', 'Hit legs and chest twice a week — splitting volume across two sessions beats one big day for growth.'],
+    ['Volume', '10–20 hard sets per muscle per week. Start near 12–16, add sets only if you’re recovering well.'],
+    ['Effort', 'End most sets 1–2 reps shy of failure. Last set of isolation work can go to failure.'],
+    ['Progression', 'Double progression: hit the top of the rep range on every set, then add weight and drop back to the bottom.'],
+    ['Rest', '2–3 min on big compounds, 60–90 s on isolation work.'],
+    ['Running', 'Keep the Tuesday run easy (Zone 2) so it helps recovery instead of eating into Wednesday’s chest day.'],
+  ];
+  return (
+    <Card title="How this plan builds muscle" icon="info" accent="text-cyan-300">
+      <dl className="space-y-2.5">
+        {items.map(([k, v]) => (
+          <div key={k}><dt className="text-xs font-semibold text-white">{k}</dt><dd className="text-xs text-slate-300 leading-relaxed">{v}</dd></div>
+        ))}
+      </dl>
+    </Card>
+  );
+}
+
+/* =========================================================
+   NUTRITION
+   ========================================================= */
+function SuppToggle({ sp, on, onToggle, compact }) {
+  return (
+    <button type="button" role="switch" aria-checked={on} onClick={onToggle}
+      className={`w-full flex items-center gap-3 rounded-xl border text-left transition ${compact ? 'px-2.5 py-1.5' : 'px-3 py-2.5'} ${on ? 'bg-emerald-400/10 border-emerald-300/35' : 'bg-white/[0.03] border-white/10 hover:bg-white/[0.06]'}`}>
+      <span className={`relative shrink-0 w-9 h-5 rounded-full transition ${on ? 'bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,.7)]' : 'bg-white/15'}`}>
+        <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className={`block text-sm font-medium ${on ? 'text-emerald-200' : 'text-white'}`}>{sp.name} <span className="text-slate-400 font-normal text-xs">· {sp.dose}</span></span>
+        {!compact && <span className="block text-[11px] text-slate-400 truncate">{sp.when}</span>}
+      </span>
+    </button>
+  );
+}
+
+function Recommendations({ items, R, targets, onAdd }) {
+  const gaps = [['Protein', R.p, targets.p, 'g'], ['Carbs', R.c, targets.c, 'g'], ['Fat', R.f, targets.f, 'g']].filter((g) => g[1] > 0).sort((a, b) => b[1] / b[2] - a[1] / a[2]);
+  return (
+    <Card title="Close the gap" subtitle={items.length ? (gaps.length ? `Biggest gap: ${gaps[0][0].toLowerCase()} — ${fmtInt(gaps[0][1])}${gaps[0][3]} left · ${fmtInt(Math.max(0, R.cal))} kcal remaining` : `${fmtInt(R.cal)} kcal remaining`) : 'You’re on target for today'} icon="sparkle" accent="text-cyan-300">
+      {items.length ? (
+        <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">
+          {items.map((x) => (
+            <div key={x.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-3 flex flex-col">
+              <div className="flex items-start justify-between gap-2">
+                <div className="text-sm font-semibold text-white leading-snug">{x.name}</div>
+                <Chip tone={x.source === 'Your meal' ? 'emerald' : 'slate'}>{x.source}</Chip>
+              </div>
+              <div className="text-xs text-cyan-200/90 mt-1.5">{x.reason}</div>
+              <div className="text-[11px] text-slate-400 mt-1 tabular-nums">{x.cal} kcal · P {x.p} · C {x.c} · F {x.f}</div>
+              <button className={btnGhost + ' mt-3 !py-1.5 text-xs'} onClick={() => onAdd(x)}><Icon name="plus" className="w-3.5 h-3.5" />Log it</button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-emerald-200">Calories and protein are covered. Nice day of eating.</p>
+      )}
+    </Card>
+  );
+}
+
+function NutritionView({ state, update, toast, today, targets, toggleSupp, addWater, addFood }) {
+  const [date, setDate] = useState(today);
+  const [libEdit, setLibEdit] = useState(null);
+  const [custom, setCustom] = useState({ name: '', cal: '', p: '', c: '', f: '' });
+  const [customOz, setCustomOz] = useState('');
+  const [filter, setFilter] = useState('All');
+
+  const tot = dayTotals(state, date);
+  const water = waterTotal(state, date);
+  const goalW = num(state.profile.waterGoal) || 100;
+  const log = state.foodLog[date] || [];
+  const { R, items } = recommend(state, targets, date);
+  const supps = state.supplements;
+  const suppDone = supps.filter((sp) => state.suppLog[date]?.[sp.id]).length;
+  const tags = ['All', ...Array.from(new Set(state.meals.map((m) => m.tag)))];
+
+  const setServ = (id, v) => update((s) => { const e = (s.foodLog[date] || []).find((x) => x.id === id); if (e) e.servings = Math.max(0.25, v); });
+  const removeEntry = (id) => update((s) => { s.foodLog[date] = (s.foodLog[date] || []).filter((x) => x.id !== id); });
+  const addCustom = (e) => {
+    e.preventDefault();
+    if (!custom.name.trim()) return;
+    addFood(date, { id: 'c-' + uid(), name: custom.name.trim(), cal: num(custom.cal), p: num(custom.p), c: num(custom.c), f: num(custom.f) });
+    setCustom({ name: '', cal: '', p: '', c: '', f: '' });
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Meals, water & supplements</h1>
+          <p className="text-sm text-slate-300 mt-1">Daily targets: {fmtInt(targets.cal)} kcal · {targets.p} g protein · {targets.c} g carbs · {targets.f} g fat — adjust on the Progress tab.</p>
+        </div>
+        <DateNav date={date} setDate={setDate} today={today} />
+      </div>
+
+      <div className="grid lg:grid-cols-3 gap-5">
+        <Card className="lg:col-span-2" title="Macros" subtitle={`${fmtInt(tot.cal)} of ${fmtInt(targets.cal)} kcal`} icon="flame">
+          <div className="flex flex-col sm:flex-row gap-6 sm:items-center">
+            <Ring value={tot.cal} max={targets.cal} size={132} stroke={11} color="#34d399">
+              <div>
+                <div className={`text-2xl font-bold tabular-nums ${tot.cal >= targets.cal * 0.95 && tot.cal <= targets.cal * 1.1 ? 'text-emerald-300 glow-emerald' : ''}`}>{fmtInt(tot.cal)}</div>
+                <div className="text-[11px] text-slate-400">kcal eaten</div>
+                <div className="text-[11px] text-slate-300 mt-0.5 tabular-nums">{fmtInt(Math.max(0, targets.cal - tot.cal))} left</div>
+              </div>
+            </Ring>
+            <div className="flex-1 grid gap-4">
+              <MacroBar label="Protein" value={tot.p} goal={targets.p} />
+              <MacroBar label="Carbs" value={tot.c} goal={targets.c} color="bg-cyan-400" glow="shadow-[0_0_14px_rgba(34,211,238,.7)]" />
+              <MacroBar label="Fat" value={tot.f} goal={targets.f} color="bg-indigo-400" glow="shadow-[0_0_14px_rgba(129,140,248,.7)]" />
+            </div>
+          </div>
+        </Card>
+
+        <Card title="Water" subtitle={water >= goalW ? 'Goal reached' : `${goalW - water} oz to go`} icon="droplet" accent="text-cyan-300">
+          <div className="flex items-center gap-4">
+            <Ring value={water} max={goalW} size={112} stroke={10} color="#22d3ee">
+              <div><div className={`text-2xl font-bold tabular-nums ${water >= goalW ? 'text-cyan-300 glow-cyan' : ''}`}>{water}</div><div className="text-[11px] text-slate-400">of {goalW} oz</div></div>
+            </Ring>
+            <div className="flex-1 space-y-1.5">
+              <div className="grid grid-cols-2 gap-1.5">
+                {[8, 12, 16, 20, 24, 32].map((oz) => <button key={oz} className={btnGhost + ' !px-2 !py-1.5 text-xs'} onClick={() => addWater(date, oz)}>+{oz} oz</button>)}
+              </div>
+              <form className="flex gap-1.5" onSubmit={(e) => { e.preventDefault(); if (num(customOz) > 0) { addWater(date, num(customOz)); setCustomOz(''); } }}>
+                <input className={inputCls + ' !py-1.5 !text-xs'} type="number" inputMode="numeric" placeholder="oz" value={customOz} onChange={(e) => setCustomOz(e.target.value)} aria-label="Custom ounces" />
+                <button className={btnGhost + ' !py-1.5 !px-2.5 text-xs'} type="submit">Add</button>
+              </form>
+            </div>
+          </div>
+          {(state.water[date] || []).length > 0 && (
+            <div className="mt-3 flex items-center gap-1.5 flex-wrap">
+              {(state.water[date] || []).map((oz, i) => <span key={i} className="text-[11px] rounded-md bg-cyan-400/10 border border-cyan-300/20 text-cyan-200 px-1.5 py-0.5 tabular-nums">{oz}</span>)}
+              <button className="text-[11px] text-slate-400 hover:text-white ml-auto" onClick={() => update((s) => { (s.water[date] || []).pop(); })}>Undo last</button>
+            </div>
+          )}
+        </Card>
+      </div>
+
+      <div className="grid lg:grid-cols-3 gap-5">
+        <Card title="Supplements" subtitle={suppDone === supps.length ? 'All taken ✓' : `${suppDone} of ${supps.length} taken`} icon="pill" accent="text-indigo-300">
+          <div className="space-y-2">
+            {supps.map((sp) => <SuppToggle key={sp.id} sp={sp} on={!!state.suppLog[date]?.[sp.id]} onToggle={() => toggleSupp(date, sp)} />)}
+          </div>
+          <SuppManager state={state} update={update} />
+        </Card>
+
+        <Card className="lg:col-span-2" title="Food log" subtitle={`${log.length} item${log.length === 1 ? '' : 's'} · ${fmtInt(tot.p)} g protein`} icon="utensils">
+          {log.length ? (
+            <ul className="divide-y divide-white/5">
+              {log.map((e) => (
+                <li key={e.id} className="py-2.5 flex items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium text-white truncate">{e.name}{e.auto && <span className="ml-2 align-middle"><Chip tone="indigo">from toggle</Chip></span>}</div>
+                    <div className="text-[11px] text-slate-400 tabular-nums">{fmtInt(e.cal * e.servings)} kcal · P {fmtInt(e.p * e.servings)} · C {fmtInt(e.c * e.servings)} · F {fmtInt(e.f * e.servings)}</div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button className={btnIcon + ' !w-7 !h-7'} aria-label="Fewer servings" onClick={() => setServ(e.id, e.servings - 0.5)}><Icon name="minus" className="w-3 h-3" /></button>
+                    <span className="w-9 text-center text-sm tabular-nums text-slate-200">{e.servings}×</span>
+                    <button className={btnIcon + ' !w-7 !h-7'} aria-label="More servings" onClick={() => setServ(e.id, e.servings + 0.5)}><Icon name="plus" className="w-3 h-3" /></button>
+                    <button className={btnIcon + ' !w-7 !h-7 ml-1'} aria-label="Remove" onClick={() => removeEntry(e.id)}><Icon name="trash" className="w-3.5 h-3.5" /></button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : <p className="text-sm text-slate-400">Nothing logged yet. Tap a meal below or use the suggestions.</p>}
+          <form onSubmit={addCustom} className="mt-4 grid grid-cols-2 sm:grid-cols-[2fr_repeat(4,1fr)_auto] gap-2 items-end">
+            <div className="col-span-2 sm:col-span-1"><label className={labelCls}>One-off item</label><input className={inputCls} placeholder="e.g. Chipotle bowl" value={custom.name} onChange={(e) => setCustom({ ...custom, name: e.target.value })} /></div>
+            {[['cal', 'kcal'], ['p', 'Protein'], ['c', 'Carbs'], ['f', 'Fat']].map(([k, l]) => (
+              <div key={k}><label className={labelCls}>{l}</label><input type="number" inputMode="decimal" className={inputCls} value={custom[k]} onChange={(e) => setCustom({ ...custom, [k]: e.target.value })} /></div>
+            ))}
+            <button type="submit" className={btnGhost + ' col-span-2 sm:col-span-1 h-[38px]'}><Icon name="plus" className="w-4 h-4" />Add</button>
+          </form>
+        </Card>
+      </div>
+
+      <Recommendations items={items.slice(0, 4)} R={R} targets={targets} onAdd={(x) => addFood(date, x)} />
+
+      <Card title="My meals" subtitle="Your regular meals — one tap logs the full macros" icon="utensils"
+        action={<button className={btnGhost} onClick={() => setLibEdit({ id: null, name: '', tag: 'Lunch', cal: '', p: '', c: '', f: '' })}><Icon name="plus" className="w-4 h-4" />New meal</button>}>
+        <div className="flex gap-1.5 flex-wrap mb-4">
+          {tags.map((t) => <button key={t} onClick={() => setFilter(t)} className={`rounded-full px-3 py-1 text-xs border transition ${filter === t ? 'bg-white/10 border-white/25 text-white' : 'border-white/10 text-slate-400 hover:text-white'}`}>{t}</button>)}
+        </div>
+        {libEdit && <MealForm meal={libEdit} onCancel={() => setLibEdit(null)} onSave={(m) => { update((s) => { if (m.id) { const i = s.meals.findIndex((x) => x.id === m.id); s.meals[i] = m; } else s.meals.push({ ...m, id: 'm-' + uid() }); }); setLibEdit(null); toast('Meal saved', 'info'); }} />}
+        <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
+          {state.meals.filter((m) => filter === 'All' || m.tag === filter).map((m) => (
+            <div key={m.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-3 flex flex-col">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0"><div className="text-sm font-semibold text-white">{m.name}</div><div className="text-[11px] text-slate-400 mt-0.5">{m.tag}</div></div>
+                <div className="flex gap-1 shrink-0">
+                  <button className={btnIcon + ' !w-7 !h-7'} aria-label="Edit meal" onClick={() => setLibEdit({ ...m })}><Icon name="edit" className="w-3.5 h-3.5" /></button>
+                  <ConfirmButton className={btnIcon + ' !w-7 !h-7'} confirmText="✕" onConfirm={() => update((s) => { s.meals = s.meals.filter((x) => x.id !== m.id); })}><Icon name="trash" className="w-3.5 h-3.5" /></ConfirmButton>
+                </div>
+              </div>
+              <div className="grid grid-cols-4 gap-1.5 mt-3 text-center">
+                {[['kcal', m.cal, 'text-white'], ['P', m.p, 'text-emerald-300'], ['C', m.c, 'text-cyan-300'], ['F', m.f, 'text-indigo-300']].map(([l, v, c]) => (
+                  <div key={l} className="rounded-lg bg-slate-950/40 border border-white/5 py-1.5"><div className={`text-sm font-semibold tabular-nums ${c}`}>{v}</div><div className="text-[10px] text-slate-400">{l}</div></div>
+                ))}
+              </div>
+              <button className={btnGhost + ' mt-3 !py-1.5 text-xs'} onClick={() => addFood(date, m)}><Icon name="plus" className="w-3.5 h-3.5" />Log {date === today ? 'today' : fmtShort(date)}</button>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <NutritionWeekChart state={state} targets={targets} today={today} />
+    </div>
+  );
+}
+
+function MealForm({ meal, onSave, onCancel }) {
+  const [m, setM] = useState(meal);
+  const tags = ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Pre-workout', 'Post-workout'];
+  return (
+    <form className="mb-4 rounded-xl border border-emerald-300/30 bg-emerald-400/[0.04] p-3 grid grid-cols-2 sm:grid-cols-[2fr_1fr_repeat(4,0.8fr)] gap-2 items-end"
+      onSubmit={(e) => { e.preventDefault(); if (!m.name.trim()) return; onSave({ ...m, name: m.name.trim(), cal: num(m.cal), p: num(m.p), c: num(m.c), f: num(m.f) }); }}>
+      <div className="col-span-2 sm:col-span-1"><label className={labelCls}>Meal name</label><input autoFocus className={inputCls} value={m.name} onChange={(e) => setM({ ...m, name: e.target.value })} /></div>
+      <div className="col-span-2 sm:col-span-1"><label className={labelCls}>When</label><select className={inputCls} value={m.tag} onChange={(e) => setM({ ...m, tag: e.target.value })}>{tags.map((t) => <option key={t}>{t}</option>)}</select></div>
+      {[['cal', 'kcal'], ['p', 'Protein g'], ['c', 'Carbs g'], ['f', 'Fat g']].map(([k, l]) => (
+        <div key={k}><label className={labelCls}>{l}</label><input type="number" inputMode="decimal" className={inputCls} value={m[k]} onChange={(e) => setM({ ...m, [k]: e.target.value })} /></div>
+      ))}
+      <div className="col-span-2 sm:col-span-6 flex gap-2 justify-end">
+        <button type="button" className={btnGhost} onClick={onCancel}>Cancel</button>
+        <button type="submit" className={btnPrimary}>Save meal</button>
+      </div>
+    </form>
+  );
+}
+
+function SuppManager({ state, update }) {
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState({ name: '', dose: '', when: '', mealId: '' });
+  if (!open) return <button className="mt-3 text-xs text-slate-400 hover:text-white" onClick={() => setOpen(true)}>Manage supplements</button>;
+  return (
+    <div className="mt-4 pt-4 border-t border-white/10 space-y-2">
+      {state.supplements.map((sp) => (
+        <div key={sp.id} className="flex items-center gap-2 text-xs">
+          <span className="flex-1 text-slate-300 truncate">{sp.name} · {sp.dose}</span>
+          <ConfirmButton className="text-slate-400 hover:text-rose-300" confirmText="Remove?" onConfirm={() => update((s) => { s.supplements = s.supplements.filter((x) => x.id !== sp.id); })}><Icon name="trash" className="w-3.5 h-3.5" /></ConfirmButton>
+        </div>
+      ))}
+      <form className="grid grid-cols-2 gap-2 pt-2" onSubmit={(e) => { e.preventDefault(); if (!f.name.trim()) return; update((s) => { s.supplements.push({ id: 's-' + uid(), name: f.name.trim(), dose: f.dose || '1 serving', when: f.when, mealId: f.mealId || undefined }); }); setF({ name: '', dose: '', when: '', mealId: '' }); }}>
+        <input className={inputCls + ' !text-xs'} placeholder="Name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+        <input className={inputCls + ' !text-xs'} placeholder="Dose" value={f.dose} onChange={(e) => setF({ ...f, dose: e.target.value })} />
+        <input className={inputCls + ' !text-xs col-span-2'} placeholder="When / how" value={f.when} onChange={(e) => setF({ ...f, when: e.target.value })} />
+        <select className={inputCls + ' !text-xs col-span-2'} value={f.mealId} onChange={(e) => setF({ ...f, mealId: e.target.value })}>
+          <option value="">Doesn’t log any macros</option>
+          {state.meals.map((m) => <option key={m.id} value={m.id}>Also logs: {m.name}</option>)}
+        </select>
+        <button type="button" className={btnGhost + ' !text-xs'} onClick={() => setOpen(false)}>Close</button>
+        <button type="submit" className={btnGhost + ' !text-xs'}><Icon name="plus" className="w-3.5 h-3.5" />Add</button>
+      </form>
+    </div>
+  );
+}
+
+function NutritionWeekChart({ state, targets, today }) {
+  const [metric, setMetric] = useState('p');
+  const cfg = {
+    p: { label: 'Protein', unit: ' g', goal: targets.p },
+    cal: { label: 'Calories', unit: ' kcal', goal: targets.cal },
+    water: { label: 'Water', unit: ' oz', goal: num(state.profile.waterGoal) || 100 },
+  }[metric];
+  const data = Array.from({ length: 14 }, (_, i) => {
+    const d = addDays(today, i - 13);
+    const v = metric === 'water' ? waterTotal(state, d) : Math.round(dayTotals(state, d)[metric]);
+    return { label: fromKey(d).toLocaleDateString(undefined, { weekday: 'short' }).slice(0, 2), tipLabel: fmtLong(d), v, met: v >= cfg.goal * 0.95 };
+  });
+  const hits = data.filter((d) => d.met).length;
+  return (
+    <Card title="Last 14 days" subtitle={`${cfg.label} goal hit on ${hits} of 14 days`} icon="chart"
+      action={<Segmented value={metric} onChange={setMetric} options={[{ value: 'p', label: 'Protein' }, { value: 'cal', label: 'Calories' }, { value: 'water', label: 'Water' }]} />}>
+      <div className="flex items-center gap-4 text-[11px] text-slate-300 mb-2">
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-400" />Goal met</span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-slate-500" />Under goal</span>
+        <span className="flex items-center gap-1.5"><span className="w-4 border-t border-dashed border-cyan-300" />Goal {fmtInt(cfg.goal)}{cfg.unit}</span>
+      </div>
+      <div className="h-56">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} margin={{ top: 8, right: 8, left: -8, bottom: 0 }} barCategoryGap="22%">
+            <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
+            <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} interval={0} />
+            <YAxis tick={axisTick} axisLine={false} tickLine={false} width={44} tickFormatter={(v) => fmtInt(v)} />
+            <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} content={<ChartTip unit={cfg.unit} names={{ v: cfg.label }} fmt={(v) => fmtInt(v)} />} />
+            <ReferenceLine y={cfg.goal} stroke="#67e8f9" strokeDasharray="4 4" strokeOpacity={0.8} />
+            <Bar dataKey="v" radius={[4, 4, 0, 0]} maxBarSize={30}>
+              {data.map((d, i) => <Cell key={i} fill={d.met ? '#34d399' : '#64748b'} />)}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </Card>
+  );
+}
+
+/* =========================================================
+   PROGRESS
+   ========================================================= */
+function ProgressView({ state, update, toast, today, targets, replaceState }) {
+  const lw = latestWeight(state);
+  const sortedW = [...state.weights].sort((a, b) => (a.date < b.date ? -1 : 1));
+  const wAgo = sortedW.filter((w) => w.date <= addDays(today, -28)).slice(-1)[0];
+  const delta = wAgo ? +(lw - wAgo.lbs).toFixed(1) : null;
+  const weekCount = workoutsInWeek(state, weekStart(today));
+  const streak = weekStreak(state, today);
+  const { best, events } = useMemo(() => computePRs(state.workoutLogs), [state.workoutLogs]);
+  const prs30 = events.filter((e) => e.date > addDays(today, -30)).length;
+  const sessions30 = Object.keys(state.workoutLogs).filter((d) => d > addDays(today, -30) && isWorkoutDone(state.workoutLogs[d])).length;
+  const goal = state.profile.goal;
+  const goodDelta = delta == null ? false : goal === 'cut' ? delta < 0 : goal === 'lean-bulk' ? delta > 0 : Math.abs(delta) < 1;
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Progress</h1>
+        <p className="text-sm text-slate-300 mt-1">Body weight, training consistency, personal records and your profile.</p>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Stat label="Body weight" value={lw} unit="lb" icon="scale" tone={goodDelta ? 'emerald' : 'white'} sub={delta == null ? `Started at ${state.profile.startWeight} lb` : `${delta > 0 ? '+' : ''}${delta} lb vs 4 weeks ago`} />
+        <Stat label="This week" value={`${weekCount}/${state.profile.workoutsPerWeek}`} icon="calendar" tone={weekCount >= num(state.profile.workoutsPerWeek) ? 'emerald' : 'white'} sub={`${sessions30} sessions in the last 30 days`} />
+        <Stat label="Training streak" value={streak} unit={streak === 1 ? 'week' : 'weeks'} icon="flame" tone={streak > 0 ? 'emerald' : 'white'} sub={`Weeks hitting ${state.profile.workoutsPerWeek}+ sessions`} />
+        <Stat label="New PRs" value={prs30} unit="in 30 days" icon="trophy" tone={prs30 > 0 ? 'cyan' : 'white'} sub={`${Object.keys(best).length} lifts tracked`} />
+      </div>
+
+      <div className="grid lg:grid-cols-3 gap-5 items-start">
+        <WeightCard state={state} update={update} toast={toast} today={today} className="lg:col-span-2" />
+        <ProfileCard state={state} update={update} targets={targets} lw={lw} />
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-5">
+        <VolumeChart state={state} today={today} />
+        <Heatmap state={state} today={today} />
+      </div>
+
+      <div className="grid lg:grid-cols-3 gap-5 items-start">
+        <PRBoard best={best} events={events} className="lg:col-span-2" />
+        <DataCard state={state} update={update} toast={toast} today={today} replaceState={replaceState} />
+      </div>
+    </div>
+  );
+}
+
+function WeightCard({ state, update, toast, today, className }) {
+  const [range, setRange] = useState(90);
+  const [v, setV] = useState('');
+  const [d, setD] = useState(today);
+  const goal = num(state.profile.targetWeight) || null;
+  const sorted = [...state.weights].sort((a, b) => (a.date < b.date ? -1 : 1));
+  const cutoff = range ? addDays(today, -range) : '0000-00-00';
+  const data = sorted.filter((w) => w.date >= cutoff).map((w) => {
+    const win = sorted.filter((x) => x.date <= w.date && x.date > addDays(w.date, -7));
+    const avg = win.reduce((a, b) => a + b.lbs, 0) / win.length;
+    return { label: fmtShort(w.date), tipLabel: fmtLong(w.date), lbs: w.lbs, avg: +avg.toFixed(1) };
+  });
+  const vals = data.map((x) => x.lbs).concat(goal ? [goal] : []);
+  const lo = vals.length ? Math.floor(Math.min(...vals) - 1) : 160, hi = vals.length ? Math.ceil(Math.max(...vals) + 1) : 190;
+  const save = (e) => {
+    e.preventDefault();
+    const lbs = Number(v);
+    if (!lbs || lbs < 60 || lbs > 500) return;
+    update((s) => { s.weights = s.weights.filter((w) => w.date !== d); s.weights.push({ date: d, lbs }); });
+    toast(`Logged ${lbs} lb for ${d === today ? 'today' : fmtShort(d)}`, 'good'); setV('');
+  };
+  return (
+    <Card className={className} title="Body weight" subtitle={goal ? `Goal ${goal} lb · line shows your 7-day average` : 'Line shows your 7-day average — set a goal weight in your profile'} icon="scale"
+      action={<Segmented value={range} onChange={setRange} options={[{ value: 30, label: '30d' }, { value: 90, label: '90d' }, { value: 0, label: 'All' }]} />}>
+      <div className="flex items-center gap-4 text-[11px] text-slate-300 mb-2">
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-slate-400" />Weigh-in</span>
+        <span className="flex items-center gap-1.5"><span className="w-4 h-0.5 rounded bg-emerald-400" />7-day average</span>
+        {goal && <span className="flex items-center gap-1.5"><span className="w-4 border-t border-dashed border-cyan-300" />Goal</span>}
+      </div>
+      <div className="h-60">
+        {data.length ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={data} margin={{ top: 8, right: 12, left: -8, bottom: 0 }}>
+              <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
+              <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} minTickGap={28} />
+              <YAxis domain={[lo, hi]} tick={axisTick} axisLine={false} tickLine={false} width={40} allowDecimals={false} />
+              <Tooltip cursor={{ stroke: 'rgba(255,255,255,0.25)' }} content={<ChartTip unit=" lb" names={{ lbs: 'Weigh-in', avg: '7-day avg' }} colors={{ lbs: '#94a3b8', avg: '#34d399' }} />} />
+              {goal && <ReferenceLine y={goal} stroke="#67e8f9" strokeDasharray="4 4" />}
+              <Line dataKey="lbs" stroke="#94a3b8" strokeWidth={0} dot={{ r: 4, fill: '#94a3b8', stroke: '#0f172a', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#e2e8f0', stroke: '#0f172a', strokeWidth: 2 }} isAnimationActive={false} />
+              <Line type="monotone" dataKey="avg" stroke="#34d399" strokeWidth={2} dot={false} activeDot={{ r: 5, fill: '#34d399', stroke: '#0f172a', strokeWidth: 2 }} style={{ filter: 'drop-shadow(0 0 6px rgba(52,211,153,.55))' }} />
+            </LineChart>
+          </ResponsiveContainer>
+        ) : <div className="h-full grid place-items-center text-sm text-slate-400">Log a weigh-in to start the chart.</div>}
+      </div>
+      <form onSubmit={save} className="mt-4 flex flex-wrap gap-2 items-end">
+        <div className="flex-1 min-w-[8rem]"><label className={labelCls}>Weight (lb)</label><input className={inputCls} type="number" step="0.1" inputMode="decimal" value={v} onChange={(e) => setV(e.target.value)} placeholder="175.0" /></div>
+        <div className="flex-1 min-w-[8rem]"><label className={labelCls}>Date</label><input className={inputCls} type="date" value={d} max={today} onChange={(e) => setD(e.target.value || today)} /></div>
+        <button type="submit" className={btnPrimary}><Icon name="plus" className="w-4 h-4" />Log weight</button>
+      </form>
+    </Card>
+  );
+}
+
+function ProfileCard({ state, update, targets, lw }) {
+  const p = state.profile;
+  const set = (k, v) => update((s) => { s.profile[k] = v; });
+  const n = (v) => (v === '' ? '' : Number(v));
+  const ft = Math.floor(num(p.heightIn) / 12), inch = num(p.heightIn) % 12;
+  return (
+    <Card title="Profile & targets" subtitle="Drives your calorie, macro and water goals" icon="user" accent="text-indigo-300">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="col-span-2"><label className={labelCls}>Name</label><input className={inputCls} value={p.name} onChange={(e) => set('name', e.target.value)} /></div>
+        <div><label className={labelCls}>Height</label>
+          <div className="flex gap-1.5">
+            <input type="number" className={inputCls} value={ft} aria-label="feet" onChange={(e) => set('heightIn', num(e.target.value) * 12 + inch)} />
+            <input type="number" className={inputCls} value={inch} aria-label="inches" onChange={(e) => set('heightIn', ft * 12 + num(e.target.value))} />
+          </div>
+          <div className="text-[10px] text-slate-500 mt-1">ft / in</div>
+        </div>
+        <div><label className={labelCls}>Age</label><input type="number" className={inputCls} value={p.age} onChange={(e) => set('age', n(e.target.value))} /><div className="text-[10px] text-slate-500 mt-1">Used for calorie math</div></div>
+        <div><label className={labelCls}>Starting weight</label><input type="number" className={inputCls} value={p.startWeight} onChange={(e) => set('startWeight', n(e.target.value))} /></div>
+        <div><label className={labelCls}>Goal weight</label><input type="number" className={inputCls} placeholder="optional" value={p.targetWeight} onChange={(e) => set('targetWeight', n(e.target.value))} /></div>
+        <div><label className={labelCls}>Sex (for BMR)</label><select className={inputCls} value={p.sex} onChange={(e) => set('sex', e.target.value)}><option value="male">Male</option><option value="female">Female</option></select></div>
+        <div><label className={labelCls}>Goal</label><select className={inputCls} value={p.goal} onChange={(e) => set('goal', e.target.value)}><option value="lean-bulk">Lean bulk (+300)</option><option value="maintain">Maintain / recomp</option><option value="cut">Cut (−450)</option></select></div>
+        <div className="col-span-2"><label className={labelCls}>Activity</label><select className={inputCls} value={p.activity} onChange={(e) => set('activity', Number(e.target.value))}>
+          <option value={1.375}>Light — 1–3 sessions/week</option><option value={1.55}>Moderate — 4–5 sessions/week</option><option value={1.725}>High — 6+ sessions or physical job</option>
+        </select></div>
+        <div><label className={labelCls}>Water goal (oz)</label><input type="number" className={inputCls} value={p.waterGoal} onChange={(e) => set('waterGoal', n(e.target.value))} /></div>
+        <div><label className={labelCls}>Sessions / week</label><input type="number" className={inputCls} value={p.workoutsPerWeek} onChange={(e) => set('workoutsPerWeek', n(e.target.value))} /></div>
+      </div>
+
+      <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/40 p-3">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-semibold text-white">Daily targets</span>
+          <label className="flex items-center gap-2 text-[11px] text-slate-300 cursor-pointer">
+            <input type="checkbox" className="accent-emerald-400" checked={!!p.customTargets} onChange={(e) => update((s) => { s.profile.customTargets = e.target.checked; if (e.target.checked) s.profile.custom = { cal: targets.cal, p: targets.p, c: targets.c, f: targets.f }; })} />
+            Set my own
+          </label>
+        </div>
+        {p.customTargets ? (
+          <div className="grid grid-cols-4 gap-2 mt-2">
+            {[['cal', 'kcal'], ['p', 'Protein'], ['c', 'Carbs'], ['f', 'Fat']].map(([k, l]) => (
+              <div key={k}><label className="block text-[10px] text-slate-400 mb-1">{l}</label><input type="number" className={inputCls + ' !px-2'} value={p.custom[k]} onChange={(e) => update((s) => { s.profile.custom[k] = n(e.target.value); })} /></div>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-4 gap-2 mt-2 text-center">
+            {[['kcal', targets.cal, 'text-white'], ['Protein', targets.p + 'g', 'text-emerald-300'], ['Carbs', targets.c + 'g', 'text-cyan-300'], ['Fat', targets.f + 'g', 'text-indigo-300']].map(([l, v, c]) => (
+              <div key={l}><div className={`text-sm font-bold tabular-nums ${c}`}>{typeof v === 'number' ? fmtInt(v) : v}</div><div className="text-[10px] text-slate-400">{l}</div></div>
+            ))}
+          </div>
+        )}
+        <div className="mt-2 text-[11px] text-slate-400 leading-relaxed">
+          BMR {fmtInt(targets.bmr)} · maintenance ≈ {fmtInt(targets.tdee)} kcal · BMI {targets.bmi.toFixed(1)} at {lw} lb.
+          {!p.customTargets && ' Protein set at 1 g per lb of body weight; fat ~27% of calories; carbs fill the rest.'}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function VolumeChart({ state, today }) {
+  const ws0 = weekStart(today);
+  const data = Array.from({ length: 8 }, (_, i) => {
+    const ws = addDays(ws0, (i - 7) * 7);
+    let vol = 0, sessions = 0, sets = 0;
+    for (let k = 0; k < 7; k++) { const log = state.workoutLogs[addDays(ws, k)]; if (isWorkoutDone(log)) { sessions++; const st = sessionStats(log); vol += st.volume; sets += st.sets; } }
+    return { label: fmtShort(ws), tipLabel: `Week of ${fmtShort(ws)}${i === 7 ? ' (this week)' : ''}`, vol: Math.round(vol), tipExtra: `${sessions} sessions · ${sets} working sets`, current: i === 7 };
+  });
+  const prev = data[6].vol, avg = data.slice(2, 6).reduce((a, b) => a + b.vol, 0) / 4;
+  const up = avg ? Math.round(((prev - avg) / avg) * 100) : 0;
+  return (
+    <Card title="Weekly training volume" subtitle={`Pounds moved (weight × reps). Last full week ${up >= 0 ? '+' : ''}${up}% vs the 4 weeks before`} icon="chart" accent="text-cyan-300">
+      <div className="h-60">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} margin={{ top: 8, right: 8, left: -4, bottom: 0 }} barCategoryGap="28%">
+            <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
+            <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} interval={0} />
+            <YAxis tick={axisTick} axisLine={false} tickLine={false} width={44} tickFormatter={(v) => (v >= 1000 ? `${Math.round(v / 1000)}k` : v)} />
+            <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} content={<ChartTip unit=" lb" names={{ vol: 'Volume' }} fmt={(v) => fmtInt(v)} />} />
+            <Bar dataKey="vol" radius={[4, 4, 0, 0]} maxBarSize={34}>
+              {data.map((d, i) => <Cell key={i} fill={d.current ? 'rgba(34,211,238,0.45)' : '#22d3ee'} />)}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      <p className="text-[11px] text-slate-400 mt-1">Lighter bar = this week, still in progress.</p>
+    </Card>
+  );
+}
+
+function Heatmap({ state, today }) {
+  const start = addDays(weekStart(today), -7 * 15);
+  const weeks = Array.from({ length: 16 }, (_, w) => Array.from({ length: 7 }, (_, d) => addDays(start, w * 7 + d)));
+  const prog = activeProgram(state);
+  let total = 0;
+  weeks.flat().forEach((d) => { if (isWorkoutDone(state.workoutLogs[d])) total++; });
+  return (
+    <Card title="Consistency" subtitle={`${total} sessions in the last 16 weeks`} icon="calendar">
+      <div className="flex gap-2">
+        <div className="grid gap-1 text-[10px] text-slate-500 pr-1" style={{ gridTemplateRows: 'repeat(7, minmax(0, 1fr))' }}>
+          {DAY_KEYS.map((k, i) => <span key={k} className="leading-none flex items-center">{i % 2 === 0 ? k : ''}</span>)}
+        </div>
+        <div className="flex-1 grid gap-1" style={{ gridTemplateColumns: 'repeat(16, minmax(0, 1fr))' }}>
+          {weeks.map((wk, wi) => (
+            <div key={wi} className="grid gap-1" style={{ gridTemplateRows: 'repeat(7, minmax(0, 1fr))' }}>
+              {wk.map((d) => {
+                const log = state.workoutLogs[d];
+                const done = isWorkoutDone(log);
+                const future = d > today;
+                const cardio = done && (log.cardio || prog.days[log.dayKey]?.type === 'cardio');
+                const cls = future ? 'bg-transparent border border-white/5' : done ? (cardio ? 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,.6)]' : 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,.6)]') : 'bg-white/[0.06]';
+                return <div key={d} title={`${fmtLong(d)}${done ? ' · ' + (log.title || 'Workout') : ''}`} className={`aspect-square rounded-[4px] ${cls} ${d === today ? 'ring-1 ring-white/70' : ''}`} />;
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="flex items-center gap-4 text-[11px] text-slate-300 mt-3">
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-400" />Lifting</span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-cyan-400" />Run day</span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-white/10" />Rest / missed</span>
+      </div>
+    </Card>
+  );
+}
+
+function PRBoard({ best, events, className }) {
+  const recent = new Set(events.slice(-12).map((e) => e.name));
+  const rows = Object.values(best).sort((a, b) => (b.date > a.date ? 1 : b.date < a.date ? -1 : b.e1 - a.e1)).slice(0, 12);
+  return (
+    <Card className={className} title="Personal records" subtitle="Best estimated 1-rep max per lift (Epley formula)" icon="trophy" accent="text-cyan-300">
+      {rows.length ? (
+        <div className="overflow-x-auto -mx-1">
+          <table className="w-full text-sm">
+            <thead><tr className="text-[11px] uppercase tracking-wider text-slate-400 text-left">
+              <th className="font-semibold py-2 px-1">Lift</th><th className="font-semibold py-2 px-1 text-right">Best set</th><th className="font-semibold py-2 px-1 text-right">Est. 1RM</th><th className="font-semibold py-2 px-1 text-right">Date</th>
+            </tr></thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.name} className="border-t border-white/5">
+                  <td className="py-2 px-1"><span className="text-white font-medium">{r.name}</span> {recent.has(r.name) && <Chip tone="cyan">recent PR</Chip>}</td>
+                  <td className="py-2 px-1 text-right tabular-nums text-slate-300">{r.w} × {r.r}</td>
+                  <td className={`py-2 px-1 text-right tabular-nums font-semibold ${recent.has(r.name) ? 'text-cyan-300 glow-cyan' : 'text-white'}`}>{Math.round(r.e1)}</td>
+                  <td className="py-2 px-1 text-right text-slate-400 text-xs">{fmtShort(r.date)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : <p className="text-sm text-slate-400">PRs appear once you’ve logged weighted sets.</p>}
+    </Card>
+  );
+}
+
+function DataCard({ state, update, toast, today, replaceState }) {
+  const [paste, setPaste] = useState('');
+  const fileRef = useRef(null);
+  const json = () => JSON.stringify(state);
+  const doImport = (text) => {
+    try {
+      const obj = JSON.parse(text);
+      if (obj.version !== 1 || !Array.isArray(obj.programs)) throw new Error('bad');
+      replaceState(obj); toast('Backup restored', 'good'); setPaste('');
+    } catch (e) { toast('That doesn’t look like a dashboard backup', 'warn'); }
+  };
+  const download = () => {
+    try {
+      const blob = new Blob([json()], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = `workouts-and-meals-${today}.json`;
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1500);
+    } catch (e) { toast('Download blocked here — use Copy instead', 'warn'); }
+  };
+  const copy = async () => { try { await navigator.clipboard.writeText(json()); toast('Backup copied to clipboard', 'info'); } catch (e) { toast('Clipboard blocked — use Download', 'warn'); } };
+  return (
+    <Card title="Data & backup" subtitle="Saved on this device, and to the cloud when you’re signed in" icon="download" accent="text-slate-300">
+      {state.sample && <p className="text-xs text-amber-200/90 mb-3">You’re viewing sample history.</p>}
+      <div className="grid grid-cols-2 gap-2">
+        <button className={btnGhost} onClick={download}><Icon name="download" className="w-4 h-4" />Download</button>
+        <button className={btnGhost} onClick={copy}><Icon name="copy" className="w-4 h-4" />Copy</button>
+        <button className={btnGhost + ' col-span-2'} onClick={() => fileRef.current?.click()}><Icon name="upload" className="w-4 h-4" />Restore from file</button>
+        <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = () => doImport(String(r.result)); r.readAsText(f); e.target.value = ''; }} />
+      </div>
+      <textarea className={inputCls + ' mt-2 h-16 text-xs font-mono'} placeholder="…or paste a backup here" value={paste} onChange={(e) => setPaste(e.target.value)} />
+      {paste && <button className={btnGhost + ' w-full mt-2'} onClick={() => doImport(paste)}>Restore pasted backup</button>}
+      <div className="mt-4 pt-4 border-t border-white/10 space-y-2">
+        <ConfirmButton className={btnGhost + ' w-full'} confirmText="Tap again — clears logs, keeps plan & meals" onConfirm={() => { update((s) => { s.workoutLogs = {}; s.weights = []; s.foodLog = {}; s.water = {}; s.suppLog = {}; s.sample = false; }); toast('History cleared', 'info'); }}>Clear history (keep program & meals)</ConfirmButton>
+        <ConfirmButton className={btnGhost + ' w-full !text-slate-400'} confirmText="Tap again — resets everything" onConfirm={() => { replaceState(defaultState()); toast('Reset to defaults', 'info'); }}>Reset everything</ConfirmButton>
+      </div>
+    </Card>
+  );
+}
+
+/* =========================================================
+   App shell
+   ========================================================= */
+const NAV = [
+  { id: 'today', label: 'Today', icon: 'home' },
+  { id: 'workouts', label: 'Workouts', icon: 'dumbbell' },
+  { id: 'nutrition', label: 'Nutrition', icon: 'utensils' },
+  { id: 'progress', label: 'Progress', icon: 'chart' },
+];
+const readHash = () => { const h = (window.location.hash || '').replace('#', ''); return TABS.includes(h) ? h : 'today'; };
+
+function Background() {
+  return (
+    <div aria-hidden="true">
+      <div className="orb" style={{ width: 560, height: 560, top: -180, left: -160, background: 'radial-gradient(circle, rgba(16,185,129,0.38), transparent 65%)' }} />
+      <div className="orb" style={{ width: 620, height: 620, top: '30%', right: -220, background: 'radial-gradient(circle, rgba(34,211,238,0.30), transparent 65%)' }} />
+      <div className="orb" style={{ width: 640, height: 640, bottom: -260, left: '22%', background: 'radial-gradient(circle, rgba(99,102,241,0.34), transparent 65%)' }} />
+      <div className="fixed inset-0 pointer-events-none" style={{ zIndex: 0, backgroundImage: 'radial-gradient(rgba(255,255,255,0.035) 1px, transparent 1px)', backgroundSize: '22px 22px' }} />
+    </div>
+  );
+}
+
+function Toasts({ toasts }) {
+  const tone = { good: 'border-emerald-300/40 text-emerald-100', pr: 'border-cyan-300/50 text-cyan-100 shadow-[0_0_30px_-6px_rgba(34,211,238,.7)]', info: 'border-white/20 text-slate-100', warn: 'border-amber-300/40 text-amber-100' };
+  const icon = { good: 'check', pr: 'trophy', info: 'info', warn: 'info' };
+  return (
+    <div className="fixed z-50 bottom-24 md:bottom-6 right-4 left-4 md:left-auto flex flex-col gap-2 items-end pointer-events-none" aria-live="polite">
+      {toasts.map((t) => (
+        <div key={t.id} className={`toast-in pointer-events-auto max-w-sm w-full md:w-auto flex items-center gap-2.5 rounded-xl bg-slate-900/85 backdrop-blur-xl border px-3.5 py-2.5 text-sm shadow-2xl ${tone[t.tone] || tone.info}`}>
+          <Icon name={icon[t.tone] || 'info'} className="w-4 h-4 shrink-0" />{t.text}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function App() {
+  const [state, setState] = useState(loadInitial);
+  const [tab, setTab] = useState(readHash);
+  const [toasts, setToasts] = useState([]);
+  const today = todayKey();
+
+  useEffect(() => { const t = setTimeout(() => storage.save(state), 250); return () => clearTimeout(t); }, [state]);
+  useEffect(() => { const h = () => setTab(readHash()); window.addEventListener('hashchange', h); return () => window.removeEventListener('hashchange', h); }, []);
+
+  const update = useCallback((fn) => setState((s) => { const n = structuredClone(s); fn(n); n.savedAt = Date.now(); return n; }), []);
+  const replaceState = useCallback((obj) => { setState({ ...normalize(obj), savedAt: Date.now() }); }, []);
+  const toast = useCallback((text, tone = 'good') => {
+    const id = uid();
+    setToasts((t) => [...t.slice(-3), { id, text, tone }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3200);
+  }, []);
+
+  /* ---------- Cloud sync ---------- */
+  const [session, setSession] = useState(null);
+  const [sync, setSync] = useState(sb ? 'signed-out' : 'unavailable');
+  const [syncMsg, setSyncMsg] = useState('');
+  const [authOpen, setAuthOpen] = useState(false);
+  const stateRef = useRef(state);
+  const pulledRef = useRef(false);
+  const pushedAtRef = useRef(0);
+  useEffect(() => { stateRef.current = state; }, [state]);
+
+  useEffect(() => {
+    if (!sb) return;
+    sb.auth.getSession().then(({ data }) => setSession(data?.session || null)).catch(() => {});
+    const { data: sub } = sb.auth.onAuthStateChange((_e, s) => setSession(s || null));
+    return () => { try { sub?.subscription?.unsubscribe(); } catch (e) {} };
+  }, []);
+
+  const push = useCallback(async (st) => {
+    if (!sb || !session) return;
+    setSync('saving');
+    try {
+      const { error } = await sb.from(SB_TABLE).upsert({ user_id: session.user.id, data: st, updated_at: new Date().toISOString() });
+      if (error) throw error;
+      pushedAtRef.current = st.savedAt || 0;
+      setSync('synced'); setSyncMsg('');
+    } catch (err) { setSync('error'); setSyncMsg(describeSbError(err)); }
+  }, [session]);
+
+  const pull = useCallback(async (initial) => {
+    if (!sb || !session) return;
+    if (initial) setSync('loading');
+    try {
+      const { data, error } = await sb.from(SB_TABLE).select('data, updated_at').eq('user_id', session.user.id).maybeSingle();
+      if (error) throw error;
+      const local = stateRef.current;
+      if (!data) {
+        // First sign-in: seed the cloud from this device (minus any sample history).
+        const seed = local.sample ? stripHistory(local) : { ...local, savedAt: local.savedAt || Date.now() };
+        if (local.sample) { setState(seed); toast('Cloud sync on — sample history cleared, your plan & meals kept', 'info'); }
+        pulledRef.current = true;
+        await push(seed);
+        return;
+      }
+      const remote = normalize(data.data || {});
+      if (local.sample || (remote.savedAt || 0) > (local.savedAt || 0)) {
+        pushedAtRef.current = remote.savedAt || 0;
+        setState(remote);
+        if (initial) toast('Loaded your data from the cloud', 'info');
+        pulledRef.current = true;
+        setSync('synced'); setSyncMsg('');
+      } else if ((local.savedAt || 0) > (remote.savedAt || 0)) {
+        pulledRef.current = true;
+        await push(local);
+      } else {
+        pushedAtRef.current = local.savedAt || 0;
+        pulledRef.current = true;
+        setSync('synced'); setSyncMsg('');
+      }
+    } catch (err) { setSync('error'); setSyncMsg(describeSbError(err)); }
+  }, [session, push, toast]);
+
+  useEffect(() => {
+    pulledRef.current = false;
+    if (session) pull(true);
+    else { setSync(sb ? 'signed-out' : 'unavailable'); setSyncMsg(''); }
+  }, [session?.user?.id]); // eslint-disable-line
+
+  useEffect(() => {
+    if (!session || !pulledRef.current) return;
+    if ((state.savedAt || 0) <= pushedAtRef.current) return;
+    setSync('saving');
+    const t = setTimeout(() => push(stateRef.current), 1200);
+    return () => clearTimeout(t);
+  }, [state, session, push]);
+
+  useEffect(() => {
+    const h = () => { if (document.visibilityState === 'visible' && session && pulledRef.current) pull(false); };
+    document.addEventListener('visibilitychange', h);
+    return () => document.removeEventListener('visibilitychange', h);
+  }, [session, pull]);
+  const go = (t) => { setTab(t); try { window.location.hash = t; } catch (e) {} window.scrollTo({ top: 0, behavior: 'smooth' }); };
+
+  const lw = latestWeight(state);
+  const targets = useMemo(() => calcTargets(state.profile, lw), [state.profile, lw]);
+
+  const addWater = (date, oz) => {
+    const before = waterTotal(state, date), goal = num(state.profile.waterGoal) || 100;
+    update((s) => { (s.water[date] ||= []).push(oz); });
+    if (before < goal && before + oz >= goal) toast(`Water goal hit — ${before + oz} oz`, 'good');
+  };
+  const addFood = (date, item) => {
+    const before = dayTotals(state, date).p;
+    update((s) => { (s.foodLog[date] ||= []).push(entryFrom(item)); });
+    if (before < targets.p && before + item.p >= targets.p) toast(`Protein goal hit — ${Math.round(before + item.p)} g`, 'good');
+    else toast(`Logged ${item.name}`, 'info');
+  };
+  const toggleSupp = (date, sp) => {
+    const on = !!state.suppLog[date]?.[sp.id];
+    update((s) => {
+      s.suppLog[date] ||= {};
+      s.suppLog[date][sp.id] = !on;
+      if (sp.mealId) {
+        s.foodLog[date] ||= [];
+        if (!on) { const m = s.meals.find((x) => x.id === sp.mealId); if (m) s.foodLog[date].push(entryFrom(m, { auto: sp.id })); }
+        else s.foodLog[date] = s.foodLog[date].filter((e) => e.auto !== sp.id);
+      }
+    });
+    if (!on) {
+      const doneAfter = state.supplements.filter((x) => x.id === sp.id || state.suppLog[date]?.[x.id]).length;
+      toast(doneAfter === state.supplements.length ? 'All supplements in for the day ✓' : `${sp.name} ✓`, 'good');
+    }
+  };
+
+  const shared = { state, update, toast, today, targets, toggleSupp, addWater, addFood };
+
+  return (
+    <div className="relative min-h-screen">
+      <Background />
+      <div className="relative z-10">
+        <header className="sticky top-0 z-40 px-3 sm:px-6 pt-3">
+          <nav className={`${glass} max-w-7xl mx-auto flex items-center gap-3 px-3 sm:px-4 py-2.5`}>
+            <a href="#today" onClick={(e) => { e.preventDefault(); go('today'); }} className="flex items-center gap-2.5 shrink-0">
+              <span className="grid place-items-center w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-400 to-cyan-400 text-slate-950 shadow-[0_0_20px_-4px_rgba(52,211,153,.8)]"><Icon name="dumbbell" className="w-5 h-5" strokeWidth={2.2} /></span>
+              <span className="font-bold tracking-tight text-[15px] leading-tight">Workouts<span className="text-emerald-300"> & </span>Meals</span>
+            </a>
+            <div className="hidden md:flex items-center gap-1 ml-6">
+              {NAV.map((n) => (
+                <button key={n.id} onClick={() => go(n.id)} className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition ${tab === n.id ? 'bg-white/10 text-white shadow-[inset_0_1px_0_rgba(255,255,255,.14)]' : 'text-slate-300 hover:text-white hover:bg-white/5'}`}>
+                  <Icon name={n.icon} className={`w-4 h-4 ${tab === n.id ? 'text-emerald-300' : ''}`} />{n.label}
+                </button>
+              ))}
+            </div>
+            <div className="ml-auto flex items-center gap-3">
+              <div className="text-xs text-slate-300 hidden lg:block">{fmtLong(today)}</div>
+              <SyncPill sync={sync} session={session} onClick={() => setAuthOpen(true)} />
+            </div>
+          </nav>
+        </header>
+
+        {state.sample && (
+          <div className="max-w-7xl mx-auto px-3 sm:px-6 mt-4">
+            <div className={`${glass} !border-amber-300/25 px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3`}>
+              <Icon name="info" className="w-5 h-5 text-amber-300 shrink-0 hidden sm:block" />
+              <p className="text-sm text-slate-200 flex-1">Showing <span className="text-amber-200 font-medium">6 weeks of sample history</span> so the charts have something to draw. Your program, meals, supplements and profile stay when you clear it.</p>
+              <div className="flex gap-2 shrink-0">
+                <button className={btnGhost + ' text-xs'} onClick={() => update((s) => { s.sample = false; })}>Keep it</button>
+                <ConfirmButton className={btnPrimary + ' !py-2 text-xs'} confirmText="Tap again to clear" onConfirm={() => { update((s) => { s.workoutLogs = {}; s.weights = [{ date: today, lbs: num(s.profile.startWeight) }]; s.foodLog = {}; s.water = {}; s.suppLog = {}; s.sample = false; }); toast('Sample data cleared — fresh start', 'info'); }}>Clear sample data</ConfirmButton>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <main className="max-w-7xl mx-auto px-3 sm:px-6 pt-6 pb-28 md:pb-12">
+          {tab === 'today' && <TodayView {...shared} go={go} />}
+          {tab === 'workouts' && <WorkoutsView {...shared} />}
+          {tab === 'nutrition' && <NutritionView {...shared} />}
+          {tab === 'progress' && <ProgressView {...shared} replaceState={replaceState} />}
+        </main>
+
+        <nav className={`md:hidden fixed bottom-3 left-3 right-3 z-40 ${glass} grid grid-cols-4 p-1.5`} style={{ paddingBottom: 'max(0.375rem, env(safe-area-inset-bottom))' }}>
+          {NAV.map((n) => (
+            <button key={n.id} onClick={() => go(n.id)} className={`flex flex-col items-center gap-0.5 rounded-xl py-2 text-[11px] font-medium transition ${tab === n.id ? 'bg-white/10 text-white' : 'text-slate-400'}`}>
+              <Icon name={n.icon} className={`w-5 h-5 ${tab === n.id ? 'text-emerald-300' : ''}`} />{n.label}
+            </button>
+          ))}
+        </nav>
+      </div>
+      <Toasts toasts={toasts} />
+      {authOpen && <AuthModal session={session} sync={sync} syncMsg={syncMsg} onClose={() => setAuthOpen(false)} onSyncNow={() => pull(false)} toast={toast} />}
+    </div>
+  );
+}
+
+function describeSbError(err) {
+  const msg = String(err?.message || err || '');
+  if (err?.code === '42P01' || err?.code === 'PGRST205' || /does not exist|schema cache|Could not find the table/i.test(msg))
+    return 'The dashboard_state table isn’t set up yet — run supabase/schema.sql in the Supabase SQL editor.';
+  if (/Failed to fetch|NetworkError|Load failed/i.test(msg))
+    return 'Can’t reach Supabase — you may be offline, or this preview blocks it (it works on the GitHub Pages site). Changes are kept on this device and sync when you’re back.';
+  if (/row-level security|permission denied/i.test(msg)) return 'Supabase refused the write (row level security). Re-run supabase/schema.sql to restore the policies.';
+  return msg || 'Unknown sync error';
+}
+
+function SyncPill({ sync, session, onClick }) {
+  if (sync === 'unavailable') return <span className="text-[11px] text-slate-400 rounded-full border border-white/10 px-2.5 py-1">Local only</span>;
+  const cfg = {
+    'signed-out': { text: 'Sign in to sync', dot: 'bg-slate-400', cls: 'border-cyan-300/40 text-cyan-200 hover:bg-cyan-400/10' },
+    loading: { text: 'Loading…', dot: 'bg-cyan-300 animate-pulse', cls: 'border-white/15 text-slate-200' },
+    saving: { text: 'Saving…', dot: 'bg-cyan-300 animate-pulse', cls: 'border-white/15 text-slate-200' },
+    synced: { text: 'Synced', dot: 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,.9)]', cls: 'border-emerald-300/30 text-emerald-200 hover:bg-emerald-400/10' },
+    error: { text: 'Sync issue', dot: 'bg-amber-400', cls: 'border-amber-300/40 text-amber-200 hover:bg-amber-400/10' },
+  }[sync] || { text: sync, dot: 'bg-slate-400', cls: 'border-white/15 text-slate-200' };
+  return (
+    <button type="button" onClick={onClick} className={`flex items-center gap-2 rounded-full border bg-white/5 px-3 py-1.5 text-xs font-medium transition ${cfg.cls}`} title={session ? session.user.email : 'Cloud sync'}>
+      <span className={`w-2 h-2 rounded-full ${cfg.dot}`} />{cfg.text}
+    </button>
+  );
+}
+
+function AuthModal({ session, sync, syncMsg, onClose, onSyncNow, toast }) {
+  const [mode, setMode] = useState('signin');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [info, setInfo] = useState('');
+  const redirect = window.location.origin + window.location.pathname;
+  useEffect(() => { const k = (e) => { if (e.key === 'Escape') onClose(); }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k); }, [onClose]);
+
+  const run = async (fn) => {
+    setBusy(true); setErr(''); setInfo('');
+    try { await fn(); } catch (e) { setErr(describeSbError(e)); }
+    setBusy(false);
+  };
+  const submit = (e) => {
+    e.preventDefault();
+    run(async () => {
+      if (mode === 'signin') {
+        const { error } = await sb.auth.signInWithPassword({ email: email.trim(), password });
+        if (error) throw error;
+        toast('Signed in — syncing', 'good'); onClose();
+      } else {
+        const { data, error } = await sb.auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: redirect } });
+        if (error) throw error;
+        if (data.session) { toast('Account created — syncing', 'good'); onClose(); }
+        else setInfo('Check your email for a confirmation link, then come back and sign in.');
+      }
+    });
+  };
+  const magic = () => run(async () => {
+    if (!email.trim()) throw new Error('Enter your email first.');
+    const { error } = await sb.auth.signInWithOtp({ email: email.trim(), options: { emailRedirectTo: redirect, shouldCreateUser: false } });
+    if (error) throw error;
+    setInfo('Sign-in link sent — open it on this device.');
+  });
+
+  return (
+    <div className="fixed inset-0 z-[60] grid place-items-center p-4 bg-slate-950/70 backdrop-blur-sm" onClick={onClose}>
+      <div className={`${glass} w-full max-w-sm p-6`} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Cloud sync">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">{session ? 'Cloud sync' : mode === 'signin' ? 'Sign in to sync' : 'Create your account'}</h2>
+            <p className="text-xs text-slate-300 mt-1">{session ? 'Your logs save to Supabase and follow you across devices.' : 'Sign in once per device — your workouts, meals and weigh-ins sync automatically.'}</p>
+          </div>
+          <button className={btnIcon + ' !w-8 !h-8'} aria-label="Close" onClick={onClose}><Icon name="x" className="w-4 h-4" /></button>
+        </div>
+
+        {session ? (
+          <div className="mt-5 space-y-3">
+            <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3 text-sm">
+              <div className="text-slate-400 text-xs">Signed in as</div>
+              <div className="text-white font-medium truncate">{session.user.email}</div>
+              <div className={`mt-2 text-xs ${sync === 'error' ? 'text-amber-200' : sync === 'synced' ? 'text-emerald-300' : 'text-slate-300'}`}>
+                {sync === 'error' ? syncMsg : sync === 'synced' ? 'All changes saved to the cloud.' : 'Syncing…'}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button className={btnGhost} onClick={onSyncNow}>Sync now</button>
+              <button className={btnGhost} onClick={async () => { try { await sb.auth.signOut(); } catch (e) {} toast('Signed out — data stays on this device', 'info'); onClose(); }}>Sign out</button>
+            </div>
+          </div>
+        ) : (
+          <form className="mt-5 space-y-3" onSubmit={submit}>
+            <div><label className={labelCls}>Email</label><input className={inputCls} type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+            <div><label className={labelCls}>Password</label><input className={inputCls} type="password" autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} /></div>
+            {err && <p className="text-xs text-amber-200">{err}</p>}
+            {info && <p className="text-xs text-emerald-200">{info}</p>}
+            <button type="submit" className={btnPrimary + ' w-full'} disabled={busy}>{busy ? 'Working…' : mode === 'signin' ? 'Sign in' : 'Create account'}</button>
+            {mode === 'signin' && <button type="button" className={btnGhost + ' w-full'} disabled={busy} onClick={magic}>Email me a sign-in link instead</button>}
+            <p className="text-xs text-slate-400 text-center">
+              {mode === 'signin' ? <>First time? <button type="button" className="text-cyan-300 hover:underline" onClick={() => setMode('signup')}>Create an account</button></> : <>Already set up? <button type="button" className="text-cyan-300 hover:underline" onClick={() => setMode('signin')}>Sign in</button></>}
+            </p>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
+class ErrorBoundary extends React.Component {
+  constructor(p) { super(p); this.state = { err: null }; }
+  static getDerivedStateFromError(err) { return { err }; }
+  render() {
+    if (!this.state.err) return this.props.children;
+    return (
+      <div className="min-h-screen grid place-items-center p-6">
+        <div className={`${glass} p-6 max-w-md text-center`}>
+          <h1 className="text-lg font-semibold">Something went wrong</h1>
+          <p className="text-sm text-slate-300 mt-2">{String(this.state.err.message || this.state.err)}</p>
+          <button className={btnGhost + ' mt-4'} onClick={() => { try { localStorage.removeItem(STORE_KEY); } catch (e) {} location.reload(); }}>Reset saved data & reload</button>
+        </div>
+      </div>
+    );
+  }
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<ErrorBoundary><App /></ErrorBoundary>);
+</script>
+<script>
+  setTimeout(function () {
+    if (!window.React || !window.Recharts || !window.Babel) {
+      document.getElementById('root').innerHTML = '<div style="min-height:100vh;display:grid;place-items:center;color:#94a3b8;font:500 14px Inter,system-ui,sans-serif;text-align:center;padding:24px">Couldn’t load the chart/React libraries.<br/>Check your connection and refresh.</div>';
+    }
+  }, 8000);
+</script>
+</body>
+</html>
