@@ -18,7 +18,7 @@ There's no sample data and no sign-in. Every change saves straight to Supabase w
 Supabase dashboard → **SQL Editor** → paste [`supabase/schema.sql`](supabase/schema.sql) → **Run**. That creates:
 
 - `app_settings`: program, saved meals, supplements, profile and macro targets (one row)
-- `daily_logs`: one row per day with the workout, food, water, supplements and weigh-in, plus daily totals (`water_oz`, `calories`, `protein_g`, `carbs_g`, `fat_g`, `workout_done`)
+- `daily_logs`: one row per day with the workout (including the post-workout walk and optional run), food, water, supplements, weigh-in, sleep and steps, plus daily totals (`water_oz`, `calories`, `protein_g`, `carbs_g`, `fat_g`, `workout_done`)
 
 Because there's no sign-in, anyone with the site link can see and edit the data. Use **Progress → Data & backup → Download** now and then to keep a copy.
 

@@ -106,65 +106,69 @@ const mk = (name, muscle, sets, repMin, repMax, weight, increment = 5, notes = '
 // ex(id, name, muscle, sets, repMin, repMax, weight, step, notes, { baseline: { w, r: [reps…] }, caution })
 const ex = (id, name, muscle, sets, repMin, repMax, weight, increment, notes = '', extra = {}) =>
   ({ id, name, muscle, sets, repMin, repMax, weight, increment, notes, ...extra });
-const PROGRAM_VERSION = 2;
+const PROGRAM_VERSION = 3;
 
 function defaultProgram() {
+  const WALK = '10–15 min easy walk after lifting (~1,000–2,000 steps)';
+  const REST_WALK = '20–30 min easy walk';
   const day2Upper = (p) => [
     ex(p + '-dbpress', 'Dumbbell Shoulder Press', 'Shoulders', 3, 10, 12, 55, 5, 'Per hand. Stay at 55 and improve the later sets.', { baseline: { w: 55, r: [13, 10, 10] }, caution: true }),
     ex(p + '-lateral', 'Dumbbell Lateral Raise', 'Shoulders', 3, 10, 12, 35, 5, 'Per hand. Strict form — drop the weight if you have to swing.', { baseline: { w: 35, r: [10, 11, 13] } }),
     ex(p + '-shrug', 'Dumbbell Shrug', 'Traps', 3, 10, 15, 75, 5, 'Per hand. Build toward 15/15/15. Straps only if comfortable.', { baseline: { w: 75, r: [15, 12, 15] } }),
-    ex(p + '-ezcurl', 'Close-Grip EZ-Bar Cable Curl', 'Biceps', 4, 10, 15, 50, 5, 'Pause if there are any elbow symptoms.', { baseline: { w: 50, r: [15, 15, 12, 12] }, caution: true }),
+    ex(p + '-ezcurl', 'Close-Grip EZ-Bar Cable Curl', 'Biceps', 4, 10, 15, 50, 5, 'Cable stack. Pause if there are any elbow symptoms.', { baseline: { w: 50, r: [15, 15, 12, 12] }, caution: true }),
     ex(p + '-highcurl', 'High Cable Single-Arm Curl', 'Biceps', 3, 10, 15, 25, 5, 'Per arm. Pause if there are any elbow symptoms.', { baseline: { w: 25, r: [12, 12, 11] }, caution: true }),
     ex(p + '-rdcable', 'Rear-Delt Cable Pull', 'Shoulders', 3, 12, 15, 40, 5, 'Same machine as the 40-lb baseline.', { caution: true }),
   ];
   return {
     id: 'prog-rotation',
-    name: 'Current Program · 7-Day (elbow-cautious)',
-    notes: 'Day 1 → Day 7, then restart at Day 1 when recovered. Anything marked “pain-free only” gets skipped the moment the elbow complains.',
+    name: 'Current Program · Weekend-first (elbow-cautious)',
+    notes: 'Long sessions on the weekend, rest Monday and Friday. Day 6 (Thu) is optional. Anything marked “pain-free only” gets skipped the moment the elbow complains.',
     days: {
-      Mon: { title: 'Heavy Quads + Calves', focus: 'Day 1', type: 'strength', exercises: [
-        ex('d1-hack', 'Hack Squat', 'Quads', 4, 8, 10, 265, 10, 'Machine base 105 + 80/side (45+25+10). Stay at 265 and build toward 10s.', { baseline: { w: 265, r: [8, 9, 9, 9] } }),
-        ex('d1-squat', 'Barbell Back Squat', 'Quads', 3, 8, 10, 185, 10, '25-lb bar + 45+30/side (confirm bar weight). Build reps only if the back feels good.', { baseline: { w: 185, r: [9, 9, 9] } }),
-        ex('d1-legpress', 'Leg Press', 'Quads', 3, 10, 12, 568, 20, 'Base 118 + five 45s/side. Keep the load, build reps, same depth every rep.', { baseline: { w: 568, r: [10, 10, 10] } }),
-        ex('d1-latlunge', 'Lateral Lunge', 'Adductors', 2, 8, 10, 0, 5, 'Bodyweight · reps per side. Start conservative and watch adductor soreness.'),
-        ex('d1-legext', 'Leg Extension', 'Quads', 3, 10, 12, 145, 10, 'Build toward 12s before increasing.', { baseline: { w: 145, r: [11, 10, 11] } }),
-        ex('d1-seatcalf', 'Seated Calf Raise', 'Calves', 3, 15, 18, 115, 10, 'Build reps before increasing.', { baseline: { w: 115, r: [15, 15, 15] } }),
-        ex('d1-standcalf', 'Standing Calf Raise', 'Calves', 3, 15, 18, 267, 10, 'Total load: 67 base + 45+45+10/side.', { baseline: { w: 267, r: [15, 15, 15] } }),
+      Sat: { title: 'Heavy Quads + Calves', focus: 'Day 1', type: 'strength', walkTarget: WALK, exercises: [
+        ex('d1-hack', 'Hack Squat', 'Quads', 4, 8, 10, 265, 5, 'Plate-loaded: base 105 + 80/side (45+25+10). Stay at 265 and build toward 10s.', { baseline: { w: 265, r: [8, 9, 9, 9] } }),
+        ex('d1-squat', 'Smith Machine Back Squat', 'Quads', 3, 8, 10, 185, 5, 'Smith bar 25 lb + 45+30/side. Build reps only if the back feels good.', { baseline: { w: 185, r: [9, 9, 9] } }),
+        ex('d1-legpress', 'Leg Press', 'Quads', 3, 10, 12, 568, 5, 'Base 118 + five 45s/side. Keep the load, build reps, same depth every rep.', { baseline: { w: 568, r: [10, 10, 10] } }),
+        ex('d1-latlunge', 'Lateral Lunge', 'Adductors', 2, 8, 10, 45, 5, 'One 45-lb dumbbell · reps per side. Watch adductor soreness.'),
+        ex('d1-legext', 'Leg Extension', 'Quads', 3, 10, 12, 145, 10, 'Selectorized stack. Build toward 12s before increasing.', { baseline: { w: 145, r: [11, 10, 11] } }),
+        ex('d1-seatcalf', 'Seated Calf Raise', 'Calves', 3, 15, 18, 115, 5, 'Build reps before increasing.', { baseline: { w: 115, r: [15, 15, 15] } }),
+        ex('d1-standcalf', 'Standing Calf Raise', 'Calves', 3, 15, 18, 267, 5, 'Total load: 67 base + 45+45+10/side.', { baseline: { w: 267, r: [15, 15, 15] } }),
       ] },
-      Tue: { title: 'Arms + Shoulders', focus: 'Day 2 · elbow-cautious', type: 'cardio', cardioTarget: 'Run — usually Tuesdays',
+      Sun: { title: 'Arms + Shoulders', focus: 'Day 2 · elbow-cautious', type: 'strength', walkTarget: WALK,
         note: 'Only pain-free movements. If elbow symptoms remain, skip upper-body work and get it assessed. Triceps are intentionally left out while the left elbow is symptomatic.',
         exercises: day2Upper('d2') },
-      Wed: { title: 'Rest / Recovery', focus: 'Day 3', type: 'rest', exercises: [],
+      Mon: { title: 'Rest / Recovery', focus: 'Day 3', type: 'rest', exercises: [], walkTarget: REST_WALK,
         note: 'Easy walk 20–30 min if comfortable.\nGentle mobility: 90/90 hip switches 2×8/side · half-kneeling hip-flexor stretch 45–60 s/side · adductor rock-backs 10/side · World’s Greatest Stretch 5/side · deep-squat hold 30–45 s.\nFoam roll 5–10 min if it helps — no aggressive stretching.\nEat to target and prioritize sleep.' },
-      Thu: { title: 'Hamstrings + Glutes', focus: 'Day 4', type: 'strength', exercises: [
-        ex('d4-rdl', 'Romanian Deadlift', 'Hamstrings', 4, 6, 10, 185, 10, '45 bar + 45+25/side. Braced back, bar close, 1–2 reps in reserve.', { baseline: { w: 185, r: [10, 10, 8, 8] } }),
-        ex('d4-hipthrust', 'Hip Thrust', 'Glutes', 3, 8, 12, 185, 10, '45 bar + 45+25/side. Build toward 10/10/10, then progress.', { baseline: { w: 185, r: [9, 9, 9] } }),
-        ex('d4-legcurl', 'Seated Leg Curl', 'Hamstrings', 3, 10, 12, 100, 10, 'Go up cautiously if the next plate is manageable; otherwise build reps.', { baseline: { w: 100, r: [12, 11, 11] } }),
+      Tue: { title: 'Hamstrings + Glutes', focus: 'Day 4', type: 'strength', walkTarget: WALK,
+        cardioTarget: 'Run club (optional) — outside, easy pace. Skip it when it’s too cold.', cardioOptional: true,
+        exercises: [
+        ex('d4-rdl', 'Romanian Deadlift', 'Hamstrings', 4, 6, 10, 185, 5, '45 bar + 45+25/side. Braced back, bar close, 1–2 reps in reserve.', { baseline: { w: 185, r: [10, 10, 8, 8] } }),
+        ex('d4-hipthrust', 'Hip Thrust', 'Glutes', 3, 8, 12, 185, 5, '45 bar + 45+25/side. Build toward 10/10/10, then progress.', { baseline: { w: 185, r: [9, 9, 9] } }),
+        ex('d4-legcurl', 'Seated Leg Curl', 'Hamstrings', 3, 10, 12, 100, 10, 'Selectorized stack. Go up only if the next plate is manageable; otherwise build reps.', { baseline: { w: 100, r: [12, 11, 11] } }),
         ex('d4-bss', 'Bulgarian Split Squat', 'Quads', 3, 8, 12, 45, 5, 'Per hand · reps per leg. Build balanced reps; drop load if form slips.', { baseline: { w: 45, r: [12, 10, 8] } }),
-        ex('d4-standcalf', 'Standing Calf Raise', 'Calves', 3, 15, 18, 267, 10, 'Same setup as Day 1, if calves have recovered.', { baseline: { w: 267, r: [15, 15, 15] } }),
+        ex('d4-standcalf', 'Standing Calf Raise', 'Calves', 3, 15, 18, 267, 5, 'Same setup as Day 1, if calves have recovered.', { baseline: { w: 267, r: [15, 15, 15] } }),
       ] },
-      Fri: { title: 'Chest + Back', focus: 'Day 5 · elbow-cautious', type: 'strength',
+      Wed: { title: 'Chest + Back', focus: 'Day 5 · elbow-cautious', type: 'strength', walkTarget: WALK,
         note: 'Pain-free exercises only while the elbow recovers — don’t force pressing or pulling through symptoms. Older chest-press options (flat DB press 70s, or Smith bench 45+25/side): pick one only if completely pain-free.',
         exercises: [
         ex('d5-incline', 'Incline Dumbbell Press', 'Chest', 4, 8, 10, 65, 5, 'Per hand. Use the 65s only if fully comfortable; otherwise skip.', { baseline: { w: 60, r: [10, 10, 10, 10] }, caution: true }),
         ex('d5-csrow', 'Chest-Supported DB Row', 'Back', 3, 8, 12, 60, 5, 'Per hand. Only if gripping/pulling is pain-free.', { baseline: { w: 55, r: [12, 12, 12] }, caution: true }),
         ex('d5-sapull', 'Single-Arm Cable Lat Pulldown', 'Back', 3, 8, 12, 55, 5, 'Per arm. Build toward 10/10/10.', { baseline: { w: 55, r: [10, 9, 10] }, caution: true }),
         ex('d5-cgpull', 'Close-Grip Cable Lat Pulldown', 'Back', 3, 10, 12, 95, 5, 'Build toward 12s.', { baseline: { w: 95, r: [10, 10, 10] }, caution: true }),
-        ex('d5-fly', 'Machine Chest Fly', 'Chest', 3, 10, 12, 145, 10, 'Build toward 12/12/12.', { baseline: { w: 145, r: [11, 10, 11] }, caution: true }),
-        ex('d5-rdfly', 'Machine Rear-Delt Fly', 'Shoulders', 3, 10, 15, 100, 10, 'Build toward 12–15.', { baseline: { w: 100, r: [10, 10, 10] }, caution: true }),
+        ex('d5-fly', 'Machine Chest Fly', 'Chest', 3, 10, 12, 145, 10, 'Selectorized stack. Build toward 12/12/12.', { baseline: { w: 145, r: [11, 10, 11] }, caution: true }),
+        ex('d5-rdfly', 'Machine Rear-Delt Fly', 'Shoulders', 3, 10, 15, 100, 10, 'Selectorized stack. Build toward 12–15.', { baseline: { w: 100, r: [10, 10, 10] }, caution: true }),
       ] },
-      Sat: { title: 'Arms/Shoulders + Light Legs', focus: 'Day 6 · optional', type: 'strength',
-        note: 'Optional while the elbow is symptomatic — don’t train through pain. Upper body: Day 2 list only if completely pain-free, still no triceps. Skip the light legs if you’re still sore from Day 4.',
+      Thu: { title: 'Arms/Shoulders + Light Legs', focus: 'Day 6 · optional', type: 'strength', walkTarget: WALK,
+        note: 'Optional — skip it if work runs late or the elbow is acting up. Upper body: Day 2 list only if completely pain-free, still no triceps. Skip the light legs if you’re still sore from Tuesday.',
         exercises: [
         ...day2Upper('d6'),
         ex('d6-legext', 'Leg Extension (light)', 'Quads', 2, 15, 20, 130, 10),
         ex('d6-legcurl', 'Seated Leg Curl (light)', 'Hamstrings', 2, 12, 15, 100, 10),
         ex('d6-abd', 'Hip Abduction', 'Glutes', 2, 15, 20, 175, 10, 'Build toward 20/20.', { baseline: { w: 175, r: [15, 15] } }),
         ex('d6-add', 'Hip Adduction', 'Adductors', 2, 15, 20, 175, 10, 'Increase only if the next plate still allows controlled reps.', { baseline: { w: 175, r: [20, 20] } }),
-        ex('d6-calf', 'Calf Raise (light)', 'Calves', 2, 15, 20, 0, 10, 'Comfortable load — enter what you use and it’ll remember.'),
+        ex('d6-calf', 'Calf Raise (light)', 'Calves', 2, 15, 20, 180, 5, 'Two 45s per side (180 lb of plates, machine base not included).'),
       ] },
-      Sun: { title: 'Rest / Recovery', focus: 'Day 7', type: 'rest', exercises: [],
-        note: 'Easy walk and gentle hip mobility if comfortable.\nPrioritize food, hydration and sleep, then restart at Day 1.' },
+      Fri: { title: 'Rest / Recovery', focus: 'Day 7', type: 'rest', exercises: [], walkTarget: REST_WALK,
+        note: 'Easy walk and gentle hip mobility if comfortable.\nPrioritize food, hydration and sleep — big leg day tomorrow.' },
     },
   };
 }
@@ -175,21 +179,23 @@ function migrate(s) {
   const p = defaultProgram();
   s.programs = [p, ...(s.programs || []).filter((x) => x.id !== p.id && !/^prog-[a-z0-9]{8}$/.test(x.id))];
   s.activeProgramId = p.id;
+  if (num(s.programVersion) < 3) { // placeholder meals/supplements → Austin's real ones
+    s.meals = DEFAULT_MEALS.map((m) => ({ ...m }));
+    s.supplements = DEFAULT_SUPPS.map((x) => ({ ...x }));
+  }
   s.programVersion = PROGRAM_VERSION;
   return true;
 }
 
+// est: true → macros are estimates until Austin enters the real ones (editing a meal clears it).
 const DEFAULT_MEALS = [
-  { id: 'm-oats', name: 'Overnight oats + whey', tag: 'Breakfast', cal: 520, p: 38, c: 64, f: 12 },
-  { id: 'm-eggs', name: 'Eggs & toast (4 eggs, 2 slices)', tag: 'Breakfast', cal: 460, p: 29, c: 30, f: 24 },
-  { id: 'm-bowl', name: 'Chicken rice bowl', tag: 'Lunch', cal: 640, p: 50, c: 72, f: 14 },
-  { id: 'm-sandwich', name: 'Turkey & cheese sandwich', tag: 'Lunch', cal: 480, p: 36, c: 44, f: 16 },
-  { id: 'm-yogurt', name: 'Greek yogurt parfait', tag: 'Snack', cal: 330, p: 27, c: 40, f: 6 },
-  { id: 'm-pbbanana', name: 'Banana + peanut butter', tag: 'Snack', cal: 295, p: 8, c: 34, f: 16 },
-  { id: 'm-pasta', name: 'Ground turkey pasta', tag: 'Dinner', cal: 720, p: 46, c: 86, f: 18 },
-  { id: 'm-salmon', name: 'Salmon, potatoes & greens', tag: 'Dinner', cal: 620, p: 40, c: 54, f: 24 },
-  { id: 'm-shake', name: 'Protein shake + creatine', tag: 'Post-workout', cal: 370, p: 56, c: 20, f: 8 },
-  { id: 'm-collagen', name: 'Pre-workout + collagen', tag: 'Pre-workout', cal: 40, p: 10, c: 0, f: 0 },
+  { id: 'm-oats', name: 'Overnight oats', tag: 'Breakfast', cal: 480, p: 28, c: 62, f: 13, est: true },
+  { id: 'm-eggs', name: 'Eggs, sausage & hash browns', tag: 'Meal 2', cal: 540, p: 29, c: 18, f: 38, est: true },
+  { id: 'm-pasta', name: 'Protein pasta', tag: 'Lunch', cal: 620, p: 42, c: 78, f: 14, est: true },
+  { id: 'm-dateballs', name: 'PB date balls + fruit', tag: 'Pre-workout', cal: 300, p: 6, c: 50, f: 10, est: true },
+  { id: 'm-shake', name: 'Raw Nutrition protein shake (+ creatine)', tag: 'Post-workout', cal: 130, p: 25, c: 4, f: 2, est: true },
+  { id: 'm-dinner', name: 'Protein, rice & veggies', tag: 'Dinner', cal: 750, p: 62, c: 77, f: 21, est: true },
+  { id: 'm-collagen', name: 'Collagen (5 g, in pre-workout)', tag: 'Pre-workout', cal: 20, p: 5, c: 0, f: 0, est: true },
 ];
 
 const FOOD_DB = [
@@ -203,7 +209,9 @@ const FOOD_DB = [
   { id: 'f-milk', name: '2% milk (1 cup)', cal: 120, p: 8, c: 12, f: 5 },
   { id: 'f-rice', name: 'White rice (1 cup cooked)', cal: 205, p: 4, c: 45, f: 0 },
   { id: 'f-bagel', name: 'Plain bagel', cal: 280, p: 11, c: 55, f: 2 },
-  { id: 'f-banana', name: 'Banana', cal: 105, p: 1, c: 27, f: 0 },
+  { id: 'f-banana', name: 'Banana', cal: 105, p: 1, c: 27, f: 0, fav: true },
+  { id: 'f-popcorn', name: 'Popcorn (3 cups air-popped)', cal: 95, p: 3, c: 19, f: 1, fav: true },
+  { id: 'f-edamame', name: 'Edamame (1 cup shelled)', cal: 190, p: 18, c: 14, f: 8, fav: true },
   { id: 'f-oats', name: 'Oats (½ cup dry)', cal: 150, p: 5, c: 27, f: 3 },
   { id: 'f-sweetpot', name: 'Sweet potato (medium)', cal: 115, p: 2, c: 27, f: 0 },
   { id: 'f-ricecake', name: 'Rice cakes + honey (2)', cal: 130, p: 2, c: 30, f: 0 },
@@ -214,16 +222,16 @@ const FOOD_DB = [
 ];
 
 const DEFAULT_SUPPS = [
-  { id: 's-creatine', name: 'Creatine', dose: '5 g', when: 'In the protein shake · after the gym or before bed' },
-  { id: 's-shake', name: 'Protein shake', dose: '2 scoops', when: 'Nightly — logs the shake’s macros', mealId: 'm-shake' },
-  { id: 's-preworkout', name: 'Pre-workout', dose: '1 scoop', when: 'Before leaving for the gym' },
-  { id: 's-collagen', name: 'Collagen', dose: '1 scoop', when: 'Mixed into the pre-workout — logs 10 g protein', mealId: 'm-collagen' },
+  { id: 's-preworkout', name: 'Pre-workout', dose: 'Raw Nutrition Pump · 1 scoop', when: 'Before leaving for the gym' },
+  { id: 's-collagen', name: 'Collagen', dose: '5 g', when: 'Mixed into the pre-workout — logs its protein', mealId: 'm-collagen' },
+  { id: 's-shake', name: 'Protein', dose: 'Raw Nutrition · 1 scoop (25 g)', when: 'After the gym — logs the shake’s macros', mealId: 'm-shake' },
+  { id: 's-creatine', name: 'Creatine', dose: '5 g', when: 'In the post-workout protein shake' },
 ];
 
 function defaultProfile() {
   return {
     name: 'Austin', heightIn: 71, startWeight: 175, age: 30, sex: 'male',
-    activity: 1.55, goal: 'lean-bulk', targetWeight: '', waterGoal: 100, workoutsPerWeek: 5,
+    activity: 1.55, goal: 'lean-bulk', targetWeight: '', waterGoal: 100, workoutsPerWeek: 5, sleepGoal: 8, stepGoal: 8000,
     customTargets: true, custom: { ...MY_TARGETS },
   };
 }
@@ -233,7 +241,7 @@ function defaultState() {
   return {
     version: 1, profile: defaultProfile(), programs: [prog], activeProgramId: prog.id,
     workoutLogs: {}, weights: [], meals: DEFAULT_MEALS.map((m) => ({ ...m })), foodLog: {},
-    water: {}, supplements: DEFAULT_SUPPS.map((s) => ({ ...s })), suppLog: {},
+    water: {}, supplements: DEFAULT_SUPPS.map((s) => ({ ...s })), suppLog: {}, sleep: {}, steps: {},
     targetsV2: true, programVersion: PROGRAM_VERSION,
   };
 }
@@ -266,11 +274,14 @@ const settingsOf = (s) => Object.fromEntries(SETTINGS_KEYS.map((k) => [k, s[k]])
 const normDay = (x) => ({
   workout: x.workout || null, food: x.food || [], water: x.water || [], supplements: x.supplements || {},
   weight: x.weight == null || x.weight === '' ? null : Number(x.weight),
+  sleep: x.sleep == null || x.sleep === '' ? null : Number(x.sleep),
+  steps: x.steps == null || x.steps === '' ? null : Number(x.steps),
 });
+let EXTRA_COLS = true; // sleep_hours / steps columns exist (turned off if the database doesn't have them yet)
 const EMPTY_DAY = stable(normDay({}));
 function dayOf(s, d) {
   const w = s.weights.find((x) => x.date === d);
-  return normDay({ workout: s.workoutLogs[d], food: s.foodLog[d], water: s.water[d], supplements: s.suppLog[d], weight: w ? w.lbs : null });
+  return normDay({ workout: s.workoutLogs[d], food: s.foodLog[d], water: s.water[d], supplements: s.suppLog[d], weight: w ? w.lbs : null, sleep: (s.sleep || {})[d], steps: (s.steps || {})[d] });
 }
 function applyDay(s, d, day) {
   if (day.workout) s.workoutLogs[d] = day.workout; else delete s.workoutLogs[d];
@@ -279,10 +290,13 @@ function applyDay(s, d, day) {
   if (Object.keys(day.supplements).length) s.suppLog[d] = day.supplements; else delete s.suppLog[d];
   s.weights = s.weights.filter((w) => w.date !== d);
   if (day.weight != null) s.weights.push({ date: d, lbs: day.weight });
+  s.sleep = s.sleep || {}; s.steps = s.steps || {};
+  if (day.sleep != null) s.sleep[d] = day.sleep; else delete s.sleep[d];
+  if (day.steps != null) s.steps[d] = day.steps; else delete s.steps[d];
 }
 function snapshot(s) {
   const m = { settings: stable(settingsOf(s)) };
-  const dates = new Set([...Object.keys(s.workoutLogs), ...Object.keys(s.foodLog), ...Object.keys(s.water), ...Object.keys(s.suppLog), ...s.weights.map((w) => w.date)]);
+  const dates = new Set([...Object.keys(s.workoutLogs), ...Object.keys(s.foodLog), ...Object.keys(s.water), ...Object.keys(s.suppLog), ...Object.keys(s.sleep || {}), ...Object.keys(s.steps || {}), ...s.weights.map((w) => w.date)]);
   dates.forEach((d) => { const v = stable(dayOf(s, d)); if (v !== EMPTY_DAY) m['day:' + d] = v; });
   return m;
 }
@@ -291,10 +305,12 @@ function diffKeys(a, b) {
   const keys = new Set([...Object.keys(a || {}), ...Object.keys(b || {})]);
   return [...keys].filter((k) => ((a || {})[k] ?? fb(k)) !== ((b || {})[k] ?? fb(k)));
 }
-const dayFromRow = (r) => normDay({ workout: r.workout, food: r.food, water: r.water, supplements: r.supplements, weight: r.weight_lbs });
+const dayFromRow = (r) => normDay({ workout: r.workout, food: r.food, water: r.water, supplements: r.supplements, weight: r.weight_lbs, sleep: r.sleep_hours, steps: r.steps });
 function rowFromDay(d, day, now) {
   const t = day.food.reduce((a, x) => ({ cal: a.cal + x.cal * x.servings, p: a.p + x.p * x.servings, c: a.c + x.c * x.servings, f: a.f + x.f * x.servings }), { cal: 0, p: 0, c: 0, f: 0 });
+  const extra = EXTRA_COLS ? { sleep_hours: day.sleep, steps: day.steps } : {};
   return {
+    ...extra,
     day: d, workout: day.workout, food: day.food, water: day.water, supplements: day.supplements, weight_lbs: day.weight,
     water_oz: Math.round(day.water.reduce((a, b) => a + num(b), 0)), calories: Math.round(t.cal), protein_g: Math.round(t.p),
     carbs_g: Math.round(t.c), fat_g: Math.round(t.f), workout_done: isWorkoutDone(day.workout), updated_at: now,
@@ -404,7 +420,8 @@ function draftSession(s, date, dk) {
       const sug = suggestion(s.workoutLogs, e, date);
       return { exId: e.id, name: e.name, muscle: e.muscle, sets: Array.from({ length: e.sets }, () => ({ w: sug.weight, r: sug.reps, done: false })) };
     }),
-    cardio: day.type === 'cardio' ? { distance: '', minutes: '', done: false } : undefined,
+    cardio: day.type === 'cardio' || day.cardioTarget ? { distance: '', minutes: '', done: false } : undefined,
+    walk: day.walkTarget ? { minutes: day.type === 'rest' ? 20 : 15, done: false } : undefined,
   };
 }
 
@@ -438,7 +455,7 @@ function recommend(s, t, date) {
   const R = { cal: t.cal - tot.cal, p: t.p - tot.p, c: t.c - tot.c, f: t.f - tot.f };
   if (R.cal < 120 && R.p < 10) return { R, items: [] };
   const W = { p: 2.2, c: 1, f: 0.8 };
-  const pool = [...s.meals.map((m) => ({ ...m, source: 'Your meal' })), ...FOOD_DB.map((m) => ({ ...m, source: 'Quick add' }))];
+  const pool = [...s.meals.map((m) => ({ ...m, source: 'Your meal' })), ...FOOD_DB.map((m) => ({ ...m, source: m.fav ? 'Your snack' : 'Quick add' }))];
   const items = pool.map((x) => {
     let benefit = 0, penalty = 0;
     for (const k of ['p', 'c', 'f']) {
@@ -447,7 +464,7 @@ function recommend(s, t, date) {
       penalty += ((W[k] * Math.max(0, x[k] - rem)) / (t[k] || 1)) * 1.2;
     }
     penalty += (Math.max(0, x.cal - Math.max(0, R.cal)) / (t.cal || 1)) * 3;
-    return { ...x, score: benefit - penalty };
+    return { ...x, score: benefit - penalty + (x.fav || x.source === 'Your meal' ? 0.06 : 0) };
   }).filter((x) => x.score > 0.02).sort((a, b) => b.score - a.score).slice(0, 6).map((x) => {
     let reason;
     if (R.p > 5 && x.p >= 10) reason = `Covers ${Math.round(Math.min(x.p, R.p))} g of your ${Math.round(R.p)} g protein gap`;
@@ -489,6 +506,7 @@ const ICONS = {
   pill: <><path d="M10.5 3.5a5 5 0 0 1 7 7l-7 7a5 5 0 0 1-7-7z" /><path d="m7 7 7 7" /></>,
   scale: <><rect x="4" y="4" width="16" height="16" rx="3" /><path d="M9 10a3 3 0 0 1 6 0M12 10l1.5-1.5" /></>,
   run: <><circle cx="14.5" cy="4.5" r="1.8" /><path d="M8 21l3-6 3 2.5V21M6 12l3-3.5 4 1 2.5 3H19" /></>,
+  walk: <><circle cx="13" cy="4.5" r="1.8" /><path d="M10 21l2-6 2.5 2.5V21M8.5 12.5 11 9l3 1 2 3" /><path d="M11 9l-1 5" /></>,
   moon: <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" />,
   copy: <><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3" /></>,
   download: <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />,
@@ -713,7 +731,7 @@ function TodayView({ state, update, toast, go, targets, today, toggleSupp, addWa
                 <>
                 {plan.note && <p className="mt-2 text-xs text-amber-200/90 leading-relaxed">{plan.note}</p>}
                 <ul className="mt-3 grid sm:grid-cols-2 gap-x-6 gap-y-1.5">
-                  {plan.cardioTarget && <li className="text-sm text-purple-200 flex gap-2"><Icon name="run" className="w-4 h-4 mt-0.5 shrink-0" />{plan.cardioTarget}</li>}
+                  {plan.cardioTarget && <li className="text-sm text-purple-200 flex gap-2 sm:col-span-2"><Icon name="run" className="w-4 h-4 mt-0.5 shrink-0" />{plan.cardioTarget}</li>}
                   {plan.exercises.map((e) => {
                     const sug = suggestion(state.workoutLogs, e, today);
                     return (
@@ -726,6 +744,7 @@ function TodayView({ state, update, toast, go, targets, today, toggleSupp, addWa
                     );
                   })}
                 </ul>
+                {plan.walkTarget && <p className={`mt-3 text-sm flex gap-2 ${log?.walk?.done ? 'text-violet-300' : 'text-zinc-300'}`}><Icon name="walk" className="w-4 h-4 mt-0.5 shrink-0" />{log?.walk?.done ? `Walk done · ${num(log.walk.minutes)} min` : `Then: ${plan.walkTarget}`}</p>}
                 </>
               )}
             </div>
@@ -807,8 +826,35 @@ function TodayView({ state, update, toast, go, targets, today, toggleSupp, addWa
         </Card>
       </div>
 
-      <Recommendations items={items.slice(0, 4)} R={R} targets={targets} onAdd={(x) => addFood(today, x)} />
+      <div className="grid lg:grid-cols-4 gap-5 items-start">
+        <RecoveryCard state={state} update={update} today={today} />
+        <div className="lg:col-span-3"><Recommendations items={items.slice(0, 4)} R={R} targets={targets} onAdd={(x) => addFood(today, x)} compact /></div>
+      </div>
     </div>
+  );
+}
+
+function RecoveryCard({ state, update, today }) {
+  const sleepGoal = num(state.profile.sleepGoal) || 8, stepGoal = num(state.profile.stepGoal) || 8000;
+  const sl = (state.sleep || {})[today], st = (state.steps || {})[today];
+  const log = state.workoutLogs[today];
+  const setSleep = (v) => update((s) => { s.sleep = s.sleep || {}; if (v === '' || v == null) delete s.sleep[today]; else s.sleep[today] = Math.max(0, Math.min(16, v)); });
+  const setSteps = (v) => update((s) => { s.steps = s.steps || {}; if (v === '') delete s.steps[today]; else s.steps[today] = Math.max(0, Math.round(Number(v))); });
+  return (
+    <Card title="Recovery" subtitle={`Goals: ${sleepGoal} h sleep · ${fmtInt(stepGoal)} steps`} icon="moon" accent="text-indigo-300">
+      <div className="space-y-4">
+        <div>
+          <div className="flex items-baseline justify-between mb-1.5"><label className={labelCls + ' !mb-0'}>Sleep last night (h)</label>{sl != null && <span className={`text-xs tabular-nums ${sl >= sleepGoal ? 'text-violet-300' : 'text-zinc-400'}`}>{sl >= sleepGoal ? 'Goal hit' : `${(sleepGoal - sl).toFixed(1)} h short`}</span>}</div>
+          <Stepper label="hours slept" value={sl ?? ''} step={0.5} onChange={setSleep} />
+        </div>
+        <div>
+          <div className="flex items-baseline justify-between mb-1.5"><label className={labelCls + ' !mb-0'}>Steps today</label>{st != null && <span className={`text-xs tabular-nums ${st >= stepGoal ? 'text-violet-300' : 'text-zinc-400'}`}>{st >= stepGoal ? 'Goal hit' : `${fmtInt(stepGoal - st)} to go`}</span>}</div>
+          <input className={inputCls} type="number" inputMode="numeric" placeholder="From your phone" value={st ?? ''} onChange={(e) => setSteps(e.target.value)} />
+          <div className="h-1.5 rounded-full bg-white/[0.07] overflow-hidden mt-2"><div className="h-full rounded-full bg-violet-400" style={{ width: `${Math.min(100, ((st || 0) / stepGoal) * 100)}%`, transition: 'width .6s ease' }} /></div>
+        </div>
+        <div className={`text-xs flex items-center gap-2 ${log?.walk?.done ? 'text-violet-300' : 'text-zinc-400'}`}><Icon name="walk" className="w-4 h-4" />{log?.walk?.done ? `Walk logged · ${num(log.walk.minutes)} min` : 'Walk not logged yet — mark it on the Workouts tab'}</div>
+      </div>
+    </Card>
   );
 }
 
@@ -869,6 +915,8 @@ function WorkoutsView({ state, update, toast, today }) {
     toast(`${plan.title} logged · ${s.sets} sets, ${fmtInt(s.volume)} lb moved`, 'good');
   };
 
+  const walkChange = (patch) => mutate((log) => { log.walk = { ...(log.walk || { minutes: 15, done: false }), ...patch }; });
+  const walkDone = () => { const on = !session.walk?.done; walkChange({ done: on }); if (on) toast(`Walk logged — ${num(session.walk?.minutes) || 15} min`, 'good'); };
   const allSets = session.exercises.reduce((a, e) => a + (e.skipped ? 0 : e.sets.length), 0);
   const doneSets = session.exercises.reduce((a, e) => a + (e.skipped ? 0 : e.sets.filter((x) => x.done).length), 0);
 
@@ -912,11 +960,14 @@ function WorkoutsView({ state, update, toast, today }) {
         <div className="lg:col-span-2 space-y-4">
           {edit ? (
             <DayEditor prog={prog} dk={dk} update={update} />
-          ) : plan.type === 'rest' && !logged ? (
-            <Card title={`${DAY_NAMES[dk]} · Rest day`} icon="moon" accent="text-indigo-300">
-              <p className="text-sm text-zinc-300 whitespace-pre-line leading-relaxed">{plan.note || 'Muscle grows between sessions, not during them. An easy walk, some mobility, and hit your protein and water anyway.'}</p>
-              <p className="text-sm text-zinc-400 mt-3">Training today instead? Pick a day above to log it on {fmtShort(date)}.</p>
-            </Card>
+          ) : plan.type === 'rest' ? (
+            <>
+              <Card title={`${DAY_NAMES[dk]} · Rest day`} icon="moon" accent="text-indigo-300">
+                <p className="text-sm text-zinc-300 whitespace-pre-line leading-relaxed">{plan.note || 'Muscle grows between sessions, not during them. An easy walk, some mobility, and hit your protein and water anyway.'}</p>
+                <p className="text-sm text-zinc-400 mt-3">Training today instead? Pick a day above to log it on {fmtShort(date)}.</p>
+              </Card>
+              {session.walk && <WalkBlock walk={session.walk} target={plan.walkTarget} onChange={walkChange} onDone={walkDone} />}
+            </>
           ) : (
             <>
               <div className={`${glass} p-4 flex flex-wrap items-center justify-between gap-3 ${session.completed ? 'pulse-glow' : ''}`}>
@@ -936,8 +987,8 @@ function WorkoutsView({ state, update, toast, today }) {
                 </div>
               </div>
 
-              {plan.type === 'cardio' && session.cardio && (
-                <CardioBlock cardio={session.cardio} target={plan.cardioTarget} onChange={(patch) => mutate((log) => { log.cardio = { ...(log.cardio || {}), ...patch }; })} onDone={() => { const on = !session.cardio.done; mutate((log) => { log.cardio = { ...(log.cardio || {}), done: on }; }); if (on) toast('Run logged — nice work', 'good'); }} />
+              {session.cardio && (
+                <CardioBlock cardio={session.cardio} target={plan.cardioTarget} optional={plan.cardioOptional} onChange={(patch) => mutate((log) => { log.cardio = { ...(log.cardio || {}), ...patch }; })} onDone={() => { const on = !session.cardio.done; mutate((log) => { log.cardio = { ...(log.cardio || {}), done: on }; }); if (on) toast('Run logged — nice work', 'good'); }} />
               )}
 
               {session.exercises.map((ex, i) => {
@@ -957,6 +1008,8 @@ function WorkoutsView({ state, update, toast, today }) {
                   />
                 );
               })}
+
+              {session.walk && <WalkBlock walk={session.walk} target={plan.walkTarget} onChange={walkChange} onDone={walkDone} />}
 
               <div className={`${glass} p-4 flex flex-col sm:flex-row gap-2`}>
                 <input className={inputCls} placeholder="Add an extra exercise to this session…" value={extraName} onChange={(e) => setExtraName(e.target.value)} list="exercise-list" />
@@ -1063,7 +1116,28 @@ function ExerciseCard({ ex, idx, planEx, last, sug, best, onSet, onToggle, onAdd
   );
 }
 
-function CardioBlock({ cardio, target, onChange, onDone }) {
+function WalkBlock({ walk, target, onChange, onDone }) {
+  return (
+    <div className={`${glass} p-4 sm:p-5 ${walk.done ? '!border-violet-300/40' : ''}`}>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="grid place-items-center w-9 h-9 rounded-xl bg-violet-400/10 border border-violet-300/30 text-violet-300 shrink-0"><Icon name="walk" className="w-[18px] h-[18px]" /></span>
+          <div className="min-w-0">
+            <h3 className="font-semibold">Walk</h3>
+            <p className="text-xs text-zinc-300">{target}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-32"><Stepper label="walk minutes" value={walk.minutes} step={5} onChange={(v) => onChange({ minutes: v })} /></div>
+          <span className="text-xs text-zinc-400">min</span>
+          <button onClick={onDone} className={`h-10 px-3 rounded-xl border text-sm font-semibold flex items-center gap-1.5 transition ${walk.done ? 'bg-violet-400 border-violet-300 text-zinc-950 shadow-[0_0_18px_-2px_rgba(167,139,250,.8)]' : 'bg-white/5 border-white/15 text-zinc-300 hover:bg-white/10'}`}><Icon name="check" className="w-4 h-4" strokeWidth={2.6} />{walk.done ? 'Done' : 'Mark done'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CardioBlock({ cardio, target, optional, onChange, onDone }) {
   const dist = num(cardio.distance), mins = num(cardio.minutes);
   let paceStr = '—';
   if (dist > 0 && mins > 0) { const sec = Math.round((mins / dist) * 60); paceStr = `${Math.floor(sec / 60)}:${pad(sec % 60)}`; }
@@ -1073,7 +1147,7 @@ function CardioBlock({ cardio, target, onChange, onDone }) {
         <div className="flex items-center gap-3">
           <span className="grid place-items-center w-9 h-9 rounded-xl bg-purple-400/10 border border-purple-300/30 text-purple-300"><Icon name="run" className="w-[18px] h-[18px]" /></span>
           <div>
-            <h3 className="font-semibold">Run</h3>
+            <h3 className="font-semibold">Run {optional && <span className="ml-1 align-middle"><Chip>Optional</Chip></span>}</h3>
             <p className="text-xs text-zinc-300">{target}</p>
           </div>
         </div>
@@ -1131,7 +1205,10 @@ function DayEditor({ prog, dk, update }) {
           </select>
         </div>
         <div className="sm:col-span-3"><label className={labelCls}>Day note</label><textarea className={inputCls + ' h-20'} value={day.note || ''} placeholder="Reminders for this day (shown above the workout)" onChange={(e) => setDay((d) => { d.note = e.target.value; })} /></div>
-        {day.type === 'cardio' && <div className="sm:col-span-3"><label className={labelCls}>Cardio target</label><input className={inputCls} value={day.cardioTarget || ''} onChange={(e) => setDay((d) => { d.cardioTarget = e.target.value; })} /></div>}
+        <div className="sm:col-span-3 grid sm:grid-cols-2 gap-3">
+          <div><label className={labelCls}>Run / cardio (leave blank for none)</label><input className={inputCls} value={day.cardioTarget || ''} placeholder="e.g. Run club — easy 3 mi" onChange={(e) => setDay((d) => { d.cardioTarget = e.target.value || undefined; })} /></div>
+          <div><label className={labelCls}>Walk (leave blank for none)</label><input className={inputCls} value={day.walkTarget || ''} placeholder="e.g. 10–15 min easy walk" onChange={(e) => setDay((d) => { d.walkTarget = e.target.value || undefined; })} /></div>
+        </div>
       </div>
 
       {day.type !== 'rest' && (
@@ -1199,7 +1276,7 @@ function PrinciplesCard() {
     ['Legs', 'Three touches a week — heavy quads, hamstrings & glutes, and light accessories — gives plenty of growth stimulus with room to recover.'],
     ['Elbow', 'Anything tagged “pain-free only” gets skipped the moment it hurts. Tap Skip so the session still logs cleanly; upper-body volume can come back once it settles.'],
     ['Rest', '2–3 min on squats, hack squat, RDLs and presses; 60–90 s on isolation work.'],
-    ['Running', 'Keep runs easy and conversational so they help recovery instead of eating into leg days.'],
+    ['Walking & runs', 'A 10–15 min walk after each session adds steps and helps recovery. Run club stays optional — keep it easy so it doesn’t eat into leg days.'],
   ];
   return (
     <Card title="How this plan builds muscle" icon="info" accent="text-purple-300">
@@ -1230,17 +1307,17 @@ function SuppToggle({ sp, on, onToggle, compact }) {
   );
 }
 
-function Recommendations({ items, R, targets, onAdd }) {
+function Recommendations({ items, R, targets, onAdd, compact }) {
   const gaps = [['Protein', R.p, targets.p, 'g'], ['Carbs', R.c, targets.c, 'g'], ['Fat', R.f, targets.f, 'g']].filter((g) => g[1] > 0).sort((a, b) => b[1] / b[2] - a[1] / a[2]);
   return (
     <Card title="Close the gap" subtitle={items.length ? (gaps.length ? `Biggest gap: ${gaps[0][0].toLowerCase()} — ${fmtInt(gaps[0][1])}${gaps[0][3]} left · ${fmtInt(Math.max(0, R.cal))} kcal remaining` : `${fmtInt(R.cal)} kcal remaining`) : 'You’re on target for today'} icon="sparkle" accent="text-purple-300">
       {items.length ? (
-        <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">
+        <div className={`grid sm:grid-cols-2 ${compact ? 'xl:grid-cols-2' : 'xl:grid-cols-4'} gap-3`}>
           {items.map((x) => (
             <div key={x.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-3 flex flex-col">
               <div className="flex items-start justify-between gap-2">
                 <div className="text-sm font-semibold text-white leading-snug">{x.name}</div>
-                <Chip tone={x.source === 'Your meal' ? 'violet' : 'zinc'}>{x.source}</Chip>
+                <Chip tone={x.source === 'Quick add' ? 'zinc' : 'violet'}>{x.source}</Chip>
               </div>
               <div className="text-xs text-purple-200/90 mt-1.5">{x.reason}</div>
               <div className="text-[11px] text-zinc-400 mt-1 tabular-nums">{x.cal} kcal · P {x.p} · C {x.c} · F {x.f}</div>
@@ -1381,7 +1458,7 @@ function NutritionView({ state, update, toast, today, targets, toggleSupp, addWa
           {state.meals.filter((m) => filter === 'All' || m.tag === filter).map((m) => (
             <div key={m.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-3 flex flex-col">
               <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0"><div className="text-sm font-semibold text-white">{m.name}</div><div className="text-[11px] text-zinc-400 mt-0.5">{m.tag}</div></div>
+                <div className="min-w-0"><div className="text-sm font-semibold text-white">{m.name}</div><div className="text-[11px] text-zinc-400 mt-0.5 flex items-center gap-1.5">{m.tag}{m.est && <Chip tone="amber">Estimate — tap ✎ to set</Chip>}</div></div>
                 <div className="flex gap-1 shrink-0">
                   <button className={btnIcon + ' !w-7 !h-7'} aria-label="Edit meal" onClick={() => setLibEdit({ ...m })}><Icon name="edit" className="w-3.5 h-3.5" /></button>
                   <ConfirmButton className={btnIcon + ' !w-7 !h-7'} confirmText="✕" onConfirm={() => update((s) => { s.meals = s.meals.filter((x) => x.id !== m.id); })}><Icon name="trash" className="w-3.5 h-3.5" /></ConfirmButton>
@@ -1405,10 +1482,10 @@ function NutritionView({ state, update, toast, today, targets, toggleSupp, addWa
 
 function MealForm({ meal, onSave, onCancel }) {
   const [m, setM] = useState(meal);
-  const tags = ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Pre-workout', 'Post-workout'];
+  const tags = ['Breakfast', 'Meal 2', 'Lunch', 'Pre-workout', 'Post-workout', 'Dinner', 'Snack'];
   return (
     <form className="mb-4 rounded-xl border border-violet-300/30 bg-violet-400/[0.04] p-3 grid grid-cols-2 sm:grid-cols-[2fr_1fr_repeat(4,0.8fr)] gap-2 items-end"
-      onSubmit={(e) => { e.preventDefault(); if (!m.name.trim()) return; onSave({ ...m, name: m.name.trim(), cal: num(m.cal), p: num(m.p), c: num(m.c), f: num(m.f) }); }}>
+      onSubmit={(e) => { e.preventDefault(); if (!m.name.trim()) return; onSave({ ...m, name: m.name.trim(), cal: num(m.cal), p: num(m.p), c: num(m.c), f: num(m.f), est: false }); }}>
       <div className="col-span-2 sm:col-span-1"><label className={labelCls}>Meal name</label><input autoFocus className={inputCls} value={m.name} onChange={(e) => setM({ ...m, name: e.target.value })} /></div>
       <div className="col-span-2 sm:col-span-1"><label className={labelCls}>When</label><select className={inputCls} value={m.tag} onChange={(e) => setM({ ...m, tag: e.target.value })}>{tags.map((t) => <option key={t}>{t}</option>)}</select></div>
       {[['cal', 'kcal'], ['p', 'Protein g'], ['c', 'Carbs g'], ['f', 'Fat g']].map(([k, l]) => (
@@ -1446,6 +1523,43 @@ function SuppManager({ state, update }) {
         <button type="submit" className={btnGhost + ' !text-xs'}><Icon name="plus" className="w-3.5 h-3.5" />Add</button>
       </form>
     </div>
+  );
+}
+
+function SleepStepsChart({ state, today }) {
+  const [metric, setMetric] = useState('sleep');
+  const cfg = metric === 'sleep'
+    ? { label: 'Sleep', unit: ' h', goal: num(state.profile.sleepGoal) || 8, get: (d) => (state.sleep || {})[d] }
+    : { label: 'Steps', unit: '', goal: num(state.profile.stepGoal) || 8000, get: (d) => (state.steps || {})[d] };
+  const data = Array.from({ length: 14 }, (_, i) => {
+    const d = addDays(today, i - 13), v = cfg.get(d);
+    return { label: fromKey(d).toLocaleDateString(undefined, { weekday: 'short' }).slice(0, 2), tipLabel: fmtLong(d), v: v == null ? null : v, met: v != null && v >= cfg.goal };
+  });
+  const logged = data.filter((d) => d.v != null);
+  const avg = logged.length ? logged.reduce((a, b) => a + b.v, 0) / logged.length : null;
+  return (
+    <Card title="Sleep & steps" subtitle={avg == null ? 'Log sleep and steps on the Today tab' : `${cfg.label}: ${metric === 'sleep' ? avg.toFixed(1) + ' h' : fmtInt(avg)} average over ${logged.length} logged day${logged.length === 1 ? '' : 's'}`} icon="moon" accent="text-indigo-300"
+      action={<Segmented value={metric} onChange={setMetric} options={[{ value: 'sleep', label: 'Sleep' }, { value: 'steps', label: 'Steps' }]} />}>
+      <div className="flex items-center gap-4 text-[11px] text-zinc-300 mb-2">
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-violet-400" />Goal met</span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-zinc-600" />Under goal</span>
+        <span className="flex items-center gap-1.5"><span className="w-4 border-t border-dashed border-purple-300" />Goal {fmtInt(cfg.goal)}{cfg.unit}</span>
+      </div>
+      <div className="h-52">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} margin={{ top: 8, right: 8, left: -8, bottom: 0 }} barCategoryGap="22%">
+            <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
+            <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} interval={0} />
+            <YAxis tick={axisTick} axisLine={false} tickLine={false} width={44} domain={[0, (max) => Math.max(max, cfg.goal * 1.15)]} tickFormatter={(v) => (metric === 'steps' && v >= 1000 ? `${Math.round(v / 1000)}k` : v)} />
+            <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} content={<ChartTip unit={cfg.unit} names={{ v: cfg.label }} fmt={(v) => (metric === 'sleep' ? v : fmtInt(v))} />} />
+            <ReferenceLine y={cfg.goal} stroke="#d8b4fe" strokeDasharray="4 4" strokeOpacity={0.8} />
+            <Bar dataKey="v" radius={[4, 4, 0, 0]} maxBarSize={30}>
+              {data.map((d, i) => <Cell key={i} fill={d.met ? '#a78bfa' : '#52525b'} />)}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </Card>
   );
 }
 
@@ -1527,6 +1641,8 @@ function ProgressView({ state, update, toast, today, targets, replaceState }) {
         <VolumeChart state={state} today={today} />
         <Heatmap state={state} today={today} />
       </div>
+
+      <SleepStepsChart state={state} today={today} />
 
       <div className="grid lg:grid-cols-3 gap-5 items-start">
         <PRBoard best={best} events={events} className="lg:col-span-2" />
@@ -1615,6 +1731,8 @@ function ProfileCard({ state, update, targets, lw }) {
         </select></div>
         <div><label className={labelCls}>Water goal (oz)</label><input type="number" className={inputCls} value={p.waterGoal} onChange={(e) => set('waterGoal', n(e.target.value))} /></div>
         <div><label className={labelCls}>Sessions / week</label><input type="number" className={inputCls} value={p.workoutsPerWeek} onChange={(e) => set('workoutsPerWeek', n(e.target.value))} /></div>
+        <div><label className={labelCls}>Sleep goal (h)</label><input type="number" step="0.5" className={inputCls} value={p.sleepGoal} onChange={(e) => set('sleepGoal', n(e.target.value))} /></div>
+        <div><label className={labelCls}>Step goal</label><input type="number" step="500" className={inputCls} value={p.stepGoal} onChange={(e) => set('stepGoal', n(e.target.value))} /></div>
       </div>
 
       <div className="mt-4 rounded-xl border border-white/10 bg-zinc-950/40 p-3">
@@ -1696,7 +1814,7 @@ function Heatmap({ state, today }) {
                 const log = state.workoutLogs[d];
                 const done = isWorkoutDone(log);
                 const future = d > today;
-                const cardio = done && (log.cardio || prog.days[log.dayKey]?.type === 'cardio');
+                const cardio = done && !!log.cardio?.done;
                 const cls = future ? 'bg-transparent border border-white/5' : done ? (cardio ? 'bg-purple-400 shadow-[0_0_8px_rgba(192,132,252,.6)]' : 'bg-violet-400 shadow-[0_0_8px_rgba(167,139,250,.6)]') : 'bg-white/[0.06]';
                 return <div key={d} title={`${fmtLong(d)}${done ? ' · ' + (log.title || 'Workout') : ''}`} className={`aspect-square rounded-[4px] ${cls} ${d === today ? 'ring-1 ring-white/70' : ''}`} />;
               })}
@@ -1706,7 +1824,7 @@ function Heatmap({ state, today }) {
       </div>
       <div className="flex items-center gap-4 text-[11px] text-zinc-300 mt-3">
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-violet-400" />Lifting</span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-purple-400" />Run day</span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-purple-400" />Included a run</span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-white/10" />Rest / missed</span>
       </div>
     </Card>
@@ -1772,7 +1890,7 @@ function DataCard({ state, update, toast, today, replaceState }) {
       <textarea className={inputCls + ' mt-2 h-16 text-xs font-mono'} placeholder="…or paste a backup here" value={paste} onChange={(e) => setPaste(e.target.value)} />
       {paste && <button className={btnGhost + ' w-full mt-2'} onClick={() => doImport(paste)}>Restore pasted backup</button>}
       <div className="mt-4 pt-4 border-t border-white/10 space-y-2">
-        <ConfirmButton className={btnGhost + ' w-full'} confirmText="Tap again — deletes all logs from the database" onConfirm={() => { update((s) => { s.workoutLogs = {}; s.weights = []; s.foodLog = {}; s.water = {}; s.suppLog = {}; }); toast('All logs cleared', 'info'); }}>Clear all logs (keeps program & meals)</ConfirmButton>
+        <ConfirmButton className={btnGhost + ' w-full'} confirmText="Tap again — deletes all logs from the database" onConfirm={() => { update((s) => { s.workoutLogs = {}; s.weights = []; s.foodLog = {}; s.water = {}; s.suppLog = {}; s.sleep = {}; s.steps = {}; }); toast('All logs cleared', 'info'); }}>Clear all logs (keeps program & meals)</ConfirmButton>
         <ConfirmButton className={btnGhost + ' w-full !text-zinc-400'} confirmText="Tap again — resets everything" onConfirm={() => { replaceState(defaultState()); toast('Reset to defaults', 'info'); }}>Reset everything</ConfirmButton>
       </div>
     </Card>
@@ -1857,11 +1975,16 @@ function App() {
       }
       const days = keys.filter((k) => k !== 'settings').map((k) => k.slice(4));
       if (days.length) {
-        const { error } = await sb.from('daily_logs').upsert(days.map((d) => rowFromDay(d, dayOf(s, d), now)));
+        let { error } = await sb.from('daily_logs').upsert(days.map((d) => rowFromDay(d, dayOf(s, d), now)));
+        if (error && EXTRA_COLS && /sleep_hours|steps/.test(String(error.message))) {
+          EXTRA_COLS = false; // database not updated yet — save everything else
+          ({ error } = await sb.from('daily_logs').upsert(days.map((d) => rowFromDay(d, dayOf(s, d), now))));
+          if (!error) { setSyncMsg('Sleep and steps aren’t saving yet — run the 2-line SQL update in Supabase.'); }
+        }
         if (error) throw error;
       }
       keys.forEach((k) => { if (snap[k] === undefined) delete syncedRef.current[k]; else syncedRef.current[k] = snap[k]; });
-      setSync('live'); setSyncMsg(''); ok = true;
+      setSync('live'); if (EXTRA_COLS) setSyncMsg(''); ok = true;
     } catch (err) {
       setSync('error'); setSyncMsg(describeSbError(err));
       clearTimeout(retryRef.current); retryRef.current = setTimeout(() => flush(), 10000);

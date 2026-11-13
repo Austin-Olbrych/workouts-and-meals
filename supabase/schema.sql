@@ -18,6 +18,8 @@ create table if not exists public.daily_logs (
   water        jsonb   not null default '[]'::jsonb,   -- each pour in oz
   supplements  jsonb   not null default '{}'::jsonb,   -- which toggles were checked
   weight_lbs   numeric,
+  sleep_hours  numeric,
+  steps        integer,
   water_oz     integer not null default 0,
   calories     integer not null default 0,
   protein_g    integer not null default 0,
@@ -26,6 +28,11 @@ create table if not exists public.daily_logs (
   workout_done boolean not null default false,
   updated_at   timestamptz not null default now()
 );
+
+-- Added later (sleep + steps). Harmless if the columns already exist.
+alter table public.daily_logs
+  add column if not exists sleep_hours numeric,
+  add column if not exists steps       integer;
 
 -- No sign-in: the site's public key can read and write both tables.
 alter table public.app_settings enable row level security;
