@@ -175,7 +175,12 @@ function defaultProgram() {
 
 // One-time swap to the current program for anyone still holding the old starter template.
 function migrate(s) {
-  if (num(s.programVersion) >= PROGRAM_VERSION) return false;
+  let changed = false;
+  if (s.profile && !s.profile.goalSetV1) {
+    s.profile = { ...s.profile, age: 30, targetWeight: s.profile.targetWeight || 200, goalSetV1: true };
+    changed = true;
+  }
+  if (num(s.programVersion) >= PROGRAM_VERSION) return changed;
   const p = defaultProgram();
   s.programs = [p, ...(s.programs || []).filter((x) => x.id !== p.id && !/^prog-[a-z0-9]{8}$/.test(x.id))];
   s.activeProgramId = p.id;
@@ -231,7 +236,7 @@ const DEFAULT_SUPPS = [
 function defaultProfile() {
   return {
     name: 'Austin', heightIn: 71, startWeight: 175, age: 30, sex: 'male',
-    activity: 1.55, goal: 'lean-bulk', targetWeight: '', waterGoal: 100, workoutsPerWeek: 5, sleepGoal: 8, stepGoal: 8000,
+    activity: 1.55, goal: 'lean-bulk', targetWeight: 200, goalSetV1: true, waterGoal: 100, workoutsPerWeek: 5, sleepGoal: 8, stepGoal: 8000,
     customTargets: true, custom: { ...MY_TARGETS },
   };
 }
@@ -1652,6 +1657,57 @@ function ProgressView({ state, update, toast, today, targets, replaceState }) {
   );
 }
 
+// Weekly rate of change from a least-squares line through the last 4 weeks of weigh-ins.
+function gainPace(s, today) {
+  const pts = [...s.weights].filter((w) => w.date > addDays(today, -28)).sort((a, b) => (a.date < b.date ? -1 : 1));
+  if (pts.length < 4) return null;
+  const t0 = fromKey(pts[0].date).getTime();
+  const xs = pts.map((w) => (fromKey(w.date).getTime() - t0) / 86400000), ys = pts.map((w) => num(w.lbs));
+  const span = xs[xs.length - 1];
+  if (span < 10) return null;
+  const mx = xs.reduce((a, b) => a + b, 0) / xs.length, my = ys.reduce((a, b) => a + b, 0) / ys.length;
+  let sxy = 0, sxx = 0;
+  xs.forEach((x, i) => { sxy += (x - mx) * (ys[i] - my); sxx += (x - mx) ** 2; });
+  return { perWeek: sxx ? (sxy / sxx) * 7 : 0, days: Math.round(span), n: pts.length };
+}
+
+function PacePanel({ state, today }) {
+  const lw = latestWeight(state);
+  const goal = num(state.profile.targetWeight) || null;
+  const lo = +(lw * 0.0025).toFixed(2), hi = +(lw * 0.005).toFixed(2); // 0.25–0.5% of body weight per week
+  const pace = gainPace(state, today);
+  const toGo = goal ? +(goal - lw).toFixed(1) : null;
+  const weeksAt = (rate) => (toGo > 0 && rate > 0 ? Math.round(toGo / rate) : null);
+  let status = null, tone = 'text-zinc-300';
+  if (pace) {
+    if (pace.perWeek < lo) { status = `Below the target pace — add about 150–200 kcal a day (an extra snack or milk in the shake) and re-check in two weeks.`; tone = 'text-amber-200'; }
+    else if (pace.perWeek > hi * 1.6) { status = `Faster than needed — more of this is likely fat. Trim about 150 kcal a day.`; tone = 'text-amber-200'; }
+    else { status = `On pace for mostly-muscle gain. Keep calories where they are.`; tone = 'text-violet-300'; }
+  }
+  return (
+    <div className="mt-4 rounded-xl border border-white/10 bg-zinc-950/40 p-3">
+      <div className="grid grid-cols-3 gap-3 text-center">
+        <div>
+          <div className={`text-lg font-bold tabular-nums ${pace && pace.perWeek >= lo && pace.perWeek <= hi * 1.6 ? 'text-violet-300 glow-violet' : 'text-white'}`}>{pace ? `${pace.perWeek >= 0 ? '+' : ''}${pace.perWeek.toFixed(2)}` : '—'}</div>
+          <div className="text-[10px] text-zinc-400">lb / week now</div>
+        </div>
+        <div>
+          <div className="text-lg font-bold tabular-nums text-white">{lo.toFixed(1)}–{hi.toFixed(1)}</div>
+          <div className="text-[10px] text-zinc-400">target lb / week</div>
+        </div>
+        <div>
+          <div className="text-lg font-bold tabular-nums text-white">{goal ? (toGo > 0 ? `${toGo}` : 'Hit!') : '—'}</div>
+          <div className="text-[10px] text-zinc-400">{goal ? `lb to ${goal}` : 'no goal set'}</div>
+        </div>
+      </div>
+      <p className={`mt-2.5 text-xs leading-relaxed ${tone}`}>
+        {pace ? status : 'Needs 4+ weigh-ins over at least 10 days to measure your pace. Weigh in each morning, after the bathroom, before eating.'}
+        {goal && toGo > 0 && <span className="text-zinc-400"> {pace && weeksAt(pace.perWeek) ? `At this pace: ~${weeksAt(pace.perWeek)} weeks to ${goal}. ` : ''}At ~{((lo + hi) / 2).toFixed(1)} lb/week: ~{weeksAt((lo + hi) / 2)} weeks.</span>}
+      </p>
+    </div>
+  );
+}
+
 function WeightCard({ state, update, toast, today, className }) {
   const [range, setRange] = useState(90);
   const [v, setV] = useState('');
@@ -1696,6 +1752,7 @@ function WeightCard({ state, update, toast, today, className }) {
           </ResponsiveContainer>
         ) : <div className="h-full grid place-items-center text-sm text-zinc-400">Log a weigh-in to start the chart.</div>}
       </div>
+      <PacePanel state={state} today={today} />
       <form onSubmit={save} className="mt-4 flex flex-wrap gap-2 items-end">
         <div className="flex-1 min-w-[8rem]"><label className={labelCls}>Weight (lb)</label><input className={inputCls} type="number" step="0.1" inputMode="decimal" value={v} onChange={(e) => setV(e.target.value)} placeholder="175.0" /></div>
         <div className="flex-1 min-w-[8rem]"><label className={labelCls}>Date</label><input className={inputCls} type="date" value={d} max={today} onChange={(e) => setD(e.target.value || today)} /></div>
