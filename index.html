@@ -106,49 +106,57 @@ const mk = (name, muscle, sets, repMin, repMax, weight, increment = 5, notes = '
 // ex(id, name, muscle, sets, repMin, repMax, weight, step, notes, { baseline: { w, r: [reps…] }, caution })
 const ex = (id, name, muscle, sets, repMin, repMax, weight, increment, notes = '', extra = {}) =>
   ({ id, name, muscle, sets, repMin, repMax, weight, increment, notes, ...extra });
-const PROGRAM_VERSION = 3;
+const PROGRAM_VERSION = 4;
 
 function defaultProgram() {
   const WALK = '10–15 min easy walk after lifting (~1,000–2,000 steps)';
   const REST_WALK = '20–30 min easy walk';
-  const day2Upper = (p) => [
-    ex(p + '-dbpress', 'Dumbbell Shoulder Press', 'Shoulders', 3, 10, 12, 55, 5, 'Per hand. Stay at 55 and improve the later sets.', { baseline: { w: 55, r: [13, 10, 10] }, caution: true }),
-    ex(p + '-lateral', 'Dumbbell Lateral Raise', 'Shoulders', 3, 10, 12, 35, 5, 'Per hand. Strict form — drop the weight if you have to swing.', { baseline: { w: 35, r: [10, 11, 13] } }),
-    ex(p + '-shrug', 'Dumbbell Shrug', 'Traps', 3, 10, 15, 75, 5, 'Per hand. Build toward 15/15/15. Straps only if comfortable.', { baseline: { w: 75, r: [15, 12, 15] } }),
-    ex(p + '-ezcurl', 'Close-Grip EZ-Bar Cable Curl', 'Biceps', 4, 10, 15, 50, 5, 'Cable stack. Pause if there are any elbow symptoms.', { baseline: { w: 50, r: [15, 15, 12, 12] }, caution: true }),
-    ex(p + '-highcurl', 'High Cable Single-Arm Curl', 'Biceps', 3, 10, 15, 25, 5, 'Per arm. Pause if there are any elbow symptoms.', { baseline: { w: 25, r: [12, 12, 11] }, caution: true }),
-    ex(p + '-rdcable', 'Rear-Delt Cable Pull', 'Shoulders', 3, 12, 15, 40, 5, 'Same machine as the 40-lb baseline.', { caution: true }),
-  ];
   return {
     id: 'prog-rotation',
     name: 'Current Program · Weekend-first (elbow-cautious)',
-    notes: 'Long sessions on the weekend, rest Monday and Friday. Day 6 (Thu) is optional. Anything marked “pain-free only” gets skipped the moment the elbow complains.',
+    notes: 'Long sessions on the weekend, rest Monday and Friday, Thursday optional. Anything marked “pain-free only” gets skipped the moment the elbow complains.',
     days: {
-      Sat: { title: 'Heavy Quads + Calves', focus: 'Day 1', type: 'strength', walkTarget: WALK, exercises: [
+      Sat: { title: 'Heavy Quads + Hams', focus: 'Day 1', type: 'strength', walkTarget: WALK, exercises: [
         ex('d1-hack', 'Hack Squat', 'Quads', 4, 8, 10, 265, 5, 'Plate-loaded: base 105 + 80/side (45+25+10). Stay at 265 and build toward 10s.', { baseline: { w: 265, r: [8, 9, 9, 9] } }),
         ex('d1-squat', 'Smith Machine Back Squat', 'Quads', 3, 8, 10, 185, 5, 'Smith bar 25 lb + 45+30/side. Build reps only if the back feels good.', { baseline: { w: 185, r: [9, 9, 9] } }),
         ex('d1-legpress', 'Leg Press', 'Quads', 3, 10, 12, 568, 5, 'Base 118 + five 45s/side. Keep the load, build reps, same depth every rep.', { baseline: { w: 568, r: [10, 10, 10] } }),
-        ex('d1-latlunge', 'Lateral Lunge', 'Adductors', 2, 8, 10, 45, 5, 'One 45-lb dumbbell · reps per side. Watch adductor soreness.'),
         ex('d1-legext', 'Leg Extension', 'Quads', 3, 10, 12, 145, 10, 'Selectorized stack. Build toward 12s before increasing.', { baseline: { w: 145, r: [11, 10, 11] } }),
+        ex('d1-lyingcurl', 'Lying Leg Curl', 'Hamstrings', 3, 10, 12, 0, 10, 'Second hamstring session of the week. Enter your starting weight on the first set.'),
+        ex('d1-abd', 'Hip Abduction', 'Glutes', 3, 15, 20, 175, 10, 'Build toward 20s, then go up.', { baseline: { w: 175, r: [15, 15] } }),
         ex('d1-seatcalf', 'Seated Calf Raise', 'Calves', 3, 15, 18, 115, 5, 'Build reps before increasing.', { baseline: { w: 115, r: [15, 15, 15] } }),
         ex('d1-standcalf', 'Standing Calf Raise', 'Calves', 3, 15, 18, 267, 5, 'Total load: 67 base + 45+45+10/side.', { baseline: { w: 267, r: [15, 15, 15] } }),
       ] },
-      Sun: { title: 'Arms + Shoulders', focus: 'Day 2 · elbow-cautious', type: 'strength', walkTarget: WALK,
-        note: 'Only pain-free movements. If elbow symptoms remain, skip upper-body work and get it assessed. Triceps are intentionally left out while the left elbow is symptomatic.',
-        exercises: day2Upper('d2') },
+      Sun: { title: 'Shoulders + Arms', focus: 'Day 2 · elbow-cautious', type: 'strength', walkTarget: WALK,
+        note: 'Only pain-free movements. If elbow symptoms remain, skip upper-body work and get it assessed. Triceps stay out while the left elbow is symptomatic. The cable fly and straight-arm pulldown give chest and back a second hit this week.',
+        exercises: [
+        ex('d2-dbpress', 'Dumbbell Shoulder Press', 'Shoulders', 3, 10, 12, 55, 5, 'Per hand. Stay at 55 and improve the later sets.', { baseline: { w: 55, r: [13, 10, 10] }, caution: true }),
+        ex('d2-cablelat', 'Cable Lateral Raise (low pulley)', 'Shoulders', 3, 12, 15, 0, 5, 'Single arm, cable set low. Enter your weight on the first set.'),
+        ex('d2-front', 'Front Raise', 'Shoulders', 3, 10, 15, 0, 5, 'Dumbbell, plate or cable — log what you use.'),
+        ex('d2-cableshrug', 'Cable Shrug', 'Traps', 3, 10, 15, 0, 5, 'Replaces DB shrugs so you can load heavier. Straps only if comfortable.'),
+        ex('d2-cablefly', 'Cable Fly (low to high)', 'Chest', 3, 12, 15, 0, 5, 'Per side. Second chest session of the week. Light, slow and pain-free.', { caution: true }),
+        ex('d2-straightarm', 'Straight-Arm Cable Pulldown', 'Back', 3, 12, 15, 0, 5, 'Elbows stay fixed, so it’s easier on the elbow. Second back session of the week.', { caution: true }),
+        ex('d2-ezcurl', 'Close-Grip EZ-Bar Cable Curl', 'Biceps', 4, 10, 15, 50, 5, 'Cable stack. Pause if there are any elbow symptoms.', { baseline: { w: 50, r: [15, 15, 12, 12] }, caution: true }),
+        ex('d2-highcurl', 'High Cable Single-Arm Curl', 'Biceps', 3, 10, 15, 25, 5, 'Per arm. Pause if there are any elbow symptoms.', { baseline: { w: 25, r: [12, 12, 11] }, caution: true }),
+      ] },
       Mon: { title: 'Rest / Recovery', focus: 'Day 3', type: 'rest', exercises: [], walkTarget: REST_WALK,
         note: 'Easy walk 20–30 min if comfortable.\nGentle mobility: 90/90 hip switches 2×8/side · half-kneeling hip-flexor stretch 45–60 s/side · adductor rock-backs 10/side · World’s Greatest Stretch 5/side · deep-squat hold 30–45 s.\nFoam roll 5–10 min if it helps — no aggressive stretching.\nEat to target and prioritize sleep.' },
-      Tue: { title: 'Hamstrings + Glutes', focus: 'Day 4', type: 'strength', walkTarget: WALK,
+      Tue: { title: 'Hams/Glutes + Quad Circuit + Core', focus: 'Day 4', type: 'strength', walkTarget: WALK,
         cardioTarget: 'Run club (optional) — outside, easy pace. Skip it when it’s too cold.', cardioOptional: true,
+        note: 'Quad circuit (A): goblet squat → split squat → lateral squat back-to-back, 60–90 s rest between rounds, 3 rounds.\nCore circuit (B): leg lifts → sled crunch → twisting crunch, 3 rounds. About 70 min total — skip the back extensions if you’re short on time.',
         exercises: [
         ex('d4-rdl', 'Romanian Deadlift', 'Hamstrings', 4, 6, 10, 185, 5, '45 bar + 45+25/side. Braced back, bar close, 1–2 reps in reserve.', { baseline: { w: 185, r: [10, 10, 8, 8] } }),
         ex('d4-hipthrust', 'Hip Thrust', 'Glutes', 3, 8, 12, 185, 5, '45 bar + 45+25/side. Build toward 10/10/10, then progress.', { baseline: { w: 185, r: [9, 9, 9] } }),
+        ex('d4-backext', '45° Back Extension (glute focus)', 'Glutes', 3, 12, 15, 0, 5, 'Round the upper back slightly, squeeze glutes at the top. Bodyweight to start; hold a plate when 15s are easy.'),
         ex('d4-legcurl', 'Seated Leg Curl', 'Hamstrings', 3, 10, 12, 100, 10, 'Selectorized stack. Go up only if the next plate is manageable; otherwise build reps.', { baseline: { w: 100, r: [12, 11, 11] } }),
-        ex('d4-bss', 'Bulgarian Split Squat', 'Quads', 3, 8, 12, 45, 5, 'Per hand · reps per leg. Build balanced reps; drop load if form slips.', { baseline: { w: 45, r: [12, 10, 8] } }),
-        ex('d4-standcalf', 'Standing Calf Raise', 'Calves', 3, 15, 18, 267, 5, 'Same setup as Day 1, if calves have recovered.', { baseline: { w: 267, r: [15, 15, 15] } }),
+        ex('d4-goblet', 'Goblet Squat', 'Quads', 3, 10, 12, 0, 5, 'Circuit A · round 1 move. Enter your dumbbell on the first set.', { circuit: 'A' }),
+        ex('d4-split', 'Split Squat', 'Quads', 3, 8, 10, 0, 5, 'Circuit A · per leg. Dumbbells per hand (or bodyweight).', { circuit: 'A' }),
+        ex('d4-latsquat', 'Lateral Squat', 'Adductors', 3, 8, 10, 45, 5, 'Circuit A · per side. One 45-lb dumbbell (what you used for lateral lunges).', { circuit: 'A' }),
+        ex('d4-legs', 'Leg Lifts', 'Core', 3, 12, 15, 0, 5, 'Circuit B. Slow lower, no swinging.', { circuit: 'B' }),
+        ex('d4-sled', 'Sled Crunch', 'Core', 3, 12, 15, 0, 5, 'Circuit B. Enter the load you use.', { circuit: 'B' }),
+        ex('d4-twist', 'Twisting Crunch', 'Core', 3, 12, 15, 0, 5, 'Circuit B · reps per side.', { circuit: 'B' }),
       ] },
       Wed: { title: 'Chest + Back', focus: 'Day 5 · elbow-cautious', type: 'strength', walkTarget: WALK,
-        note: 'Pain-free exercises only while the elbow recovers — don’t force pressing or pulling through symptoms. Older chest-press options (flat DB press 70s, or Smith bench 45+25/side): pick one only if completely pain-free.',
+        note: 'Pain-free exercises only while the elbow recovers — don’t force pressing or pulling through symptoms. Once the elbow is clear, a neutral-grip machine chest press (3 × 10–12) is the next chest add.',
         exercises: [
         ex('d5-incline', 'Incline Dumbbell Press', 'Chest', 4, 8, 10, 65, 5, 'Per hand. Use the 65s only if fully comfortable; otherwise skip.', { baseline: { w: 60, r: [10, 10, 10, 10] }, caution: true }),
         ex('d5-csrow', 'Chest-Supported DB Row', 'Back', 3, 8, 12, 60, 5, 'Per hand. Only if gripping/pulling is pain-free.', { baseline: { w: 55, r: [12, 12, 12] }, caution: true }),
@@ -157,13 +165,15 @@ function defaultProgram() {
         ex('d5-fly', 'Machine Chest Fly', 'Chest', 3, 10, 12, 145, 10, 'Selectorized stack. Build toward 12/12/12.', { baseline: { w: 145, r: [11, 10, 11] }, caution: true }),
         ex('d5-rdfly', 'Machine Rear-Delt Fly', 'Shoulders', 3, 10, 15, 100, 10, 'Selectorized stack. Build toward 12–15.', { baseline: { w: 100, r: [10, 10, 10] }, caution: true }),
       ] },
-      Thu: { title: 'Arms/Shoulders + Light Legs', focus: 'Day 6 · optional', type: 'strength', walkTarget: WALK,
-        note: 'Optional — skip it if work runs late or the elbow is acting up. Upper body: Day 2 list only if completely pain-free, still no triceps. Skip the light legs if you’re still sore from Tuesday.',
+      Thu: { title: 'Upper Pump + Light Legs', focus: 'Day 6 · optional', type: 'strength', walkTarget: WALK,
+        note: 'Optional — skip it if work runs late or the elbow is acting up. Kept shorter than Sunday so shoulders don’t get overdone. Skip the light legs if you’re still sore from Tuesday.',
         exercises: [
-        ...day2Upper('d6'),
+        ex('d6-pecdeck', 'Pec Deck', 'Chest', 3, 12, 15, 0, 10, 'Third chest hit on weeks you train Thursday. Pain-free range only.', { caution: true }),
+        ex('d6-cablelat', 'Cable Lateral Raise (low pulley)', 'Shoulders', 3, 12, 15, 0, 5, 'Single arm, cable set low.'),
+        ex('d6-cableshrug', 'Cable Shrug', 'Traps', 3, 10, 15, 0, 5),
+        ex('d6-ezcurl', 'Close-Grip EZ-Bar Cable Curl', 'Biceps', 3, 10, 15, 50, 5, 'Pause if there are any elbow symptoms.', { baseline: { w: 50, r: [15, 15, 12, 12] }, caution: true }),
         ex('d6-legext', 'Leg Extension (light)', 'Quads', 2, 15, 20, 130, 10),
         ex('d6-legcurl', 'Seated Leg Curl (light)', 'Hamstrings', 2, 12, 15, 100, 10),
-        ex('d6-abd', 'Hip Abduction', 'Glutes', 2, 15, 20, 175, 10, 'Build toward 20/20.', { baseline: { w: 175, r: [15, 15] } }),
         ex('d6-add', 'Hip Adduction', 'Adductors', 2, 15, 20, 175, 10, 'Increase only if the next plate still allows controlled reps.', { baseline: { w: 175, r: [20, 20] } }),
         ex('d6-calf', 'Calf Raise (light)', 'Calves', 2, 15, 20, 180, 5, 'Two 45s per side (180 lb of plates, machine base not included).'),
       ] },
@@ -173,7 +183,17 @@ function defaultProgram() {
   };
 }
 
-// One-time swap to the current program for anyone still holding the old starter template.
+// Keep anything Austin already changed in the app (weights, reps, notes…) on exercises that carry over.
+function carryOver(prev, next) {
+  const old = {};
+  Object.values(prev.days || {}).forEach((d) => (d.exercises || []).forEach((e) => { old[e.id] = e; }));
+  Object.values(next.days).forEach((d) => d.exercises.forEach((e) => {
+    const o = old[e.id];
+    if (!o) return;
+    ['weight', 'sets', 'repMin', 'repMax', 'increment', 'caution'].forEach((k) => { if (o[k] !== undefined) e[k] = o[k]; });
+  }));
+}
+
 function migrate(s) {
   let changed = false;
   if (s.profile && !s.profile.goalSetV1) {
@@ -182,6 +202,8 @@ function migrate(s) {
   }
   if (num(s.programVersion) >= PROGRAM_VERSION) return changed;
   const p = defaultProgram();
+  const prev = (s.programs || []).find((x) => x.id === p.id);
+  if (prev && num(s.programVersion) >= 3) carryOver(prev, p);
   s.programs = [p, ...(s.programs || []).filter((x) => x.id !== p.id && !/^prog-[a-z0-9]{8}$/.test(x.id))];
   s.activeProgramId = p.id;
   if (num(s.programVersion) < 3) { // placeholder meals/supplements → Austin's real ones
@@ -1063,6 +1085,7 @@ function ExerciseCard({ ex, idx, planEx, last, sug, best, onSet, onToggle, onAdd
             <h3 className="font-semibold text-white">{ex.name}</h3>
             <Chip tone={PRIORITY.includes(ex.muscle) ? 'violet' : 'zinc'}>{ex.muscle}</Chip>
             {planEx?.caution && <Chip tone="amber">Pain-free only</Chip>}
+            {planEx?.circuit && <Chip tone="purple">Circuit {planEx.circuit}</Chip>}
           </div>
           {planEx && <p className="text-sm text-zinc-300 mt-1">{planEx.sets} × {planEx.repMin}–{planEx.repMax} reps{planEx.notes && <span className="text-zinc-400"> · {planEx.notes}</span>}</p>}
         </div>
@@ -1237,6 +1260,7 @@ function DayEditor({ prog, dk, update }) {
               </div>
               <input className={inputCls + ' mt-2'} placeholder="Notes (cues, rest time, per-hand…)" value={e.notes || ''} onChange={(ev) => setEx(i, 'notes', ev.target.value)} />
               <label className="mt-2 flex items-center gap-2 text-xs text-zinc-300 cursor-pointer"><input type="checkbox" className="accent-violet-400" checked={!!e.caution} onChange={(ev) => setEx(i, 'caution', ev.target.checked)} />Pain-free only (shows a caution tag)</label>
+              <label className="mt-2 flex items-center gap-2 text-xs text-zinc-300">Circuit group <input className={inputCls + ' !w-16 !py-1 !text-xs'} maxLength={2} placeholder="—" value={e.circuit || ''} onChange={(ev) => setEx(i, 'circuit', ev.target.value.toUpperCase() || undefined)} /><span className="text-zinc-500">same letter = done back-to-back</span></label>
             </div>
           ))}
           <button className={btnGhost + ' w-full'} onClick={() => setDay((d) => { d.exercises.push(mk('New exercise', 'Chest', 3, 8, 12, 0, 5)); })}><Icon name="plus" className="w-4 h-4" />Add exercise</button>
