@@ -24,3 +24,6 @@ Because there's no sign-in, anyone with the site link can see and edit the data.
 
 ## Hosting
 GitHub Pages → **Settings → Pages → Deploy from a branch → `main` / root**.
+
+## iPhone widget
+[`widget/workouts-widget.js`](widget/workouts-widget.js) is a [Scriptable](https://apps.apple.com/app/scriptable/id1405459188) script. It reads today's row from Supabase and shows workout status, water, macros and supplements on the Home Screen (small, medium or large) or the Lock Screen (rectangular, circular or inline). For the circular widget, set the widget's Parameter to `water`, `protein` or `calories`. Tapping any widget opens the dashboard.
