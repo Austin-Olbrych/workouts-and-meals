@@ -1,5 +1,6 @@
 // Workouts & Meals — iPhone widget (Scriptable)
 // Home Screen: small · medium · large      Lock Screen: rectangular · circular · inline
+// Rectangular lock widget: calories, protein and water with mini bars.
 // Circular widget: set the widget's Parameter to  water  (default),  protein  or  calories.
 // Tapping any widget opens the dashboard.
 
@@ -87,7 +88,7 @@ function workoutStatus(w) {
   return "Planned";
 }
 
-function bar(pct, w, h, color) {
+function bar(pct, w, h, color, trackColor) {
   const ctx = new DrawContext();
   ctx.size = new Size(w, h);
   ctx.opaque = false;
@@ -96,13 +97,13 @@ function bar(pct, w, h, color) {
   const track = new Path();
   track.addRoundedRect(new Rect(0, 0, w, h), r, r);
   ctx.addPath(track);
-  ctx.setFillColor(new Color(C.track));
+  ctx.setFillColor(trackColor || new Color(C.track));
   ctx.fillPath();
   if (pct > 0) {
     const fill = new Path();
     fill.addRoundedRect(new Rect(0, 0, Math.max(h, Math.min(1, pct) * w), h), r, r);
     ctx.addPath(fill);
-    ctx.setFillColor(new Color(pct > 1.1 ? C.amber : color));
+    ctx.setFillColor(typeof color === "string" ? new Color(pct > 1.1 ? C.amber : color) : color);
     ctx.fillPath();
   }
   return ctx.getImage();
@@ -241,12 +242,23 @@ function lockWidget(d, family, param) {
     u.centerAlignText();
     return w;
   }
-  // accessoryRectangular
+  // accessoryRectangular: calories, protein, water — label · bar · value
   w.addAccessoryWidgetBackground = true;
-  w.setPadding(2, 6, 2, 6);
-  text(w, `${d.workout.title} · ${workoutStatus(d.workout)}`, 13, C.text, "bold");
-  text(w, `💧 ${fmt(d.water.v)}/${d.water.goal} oz   P ${fmt(d.p.v)}/${d.p.goal} g`, 12, C.text, "medium");
-  text(w, `🔥 ${fmt(d.cal.v)} / ${fmt(d.cal.goal)} kcal · 💊 ${d.supps.v}/${d.supps.goal}`, 12, C.text, "medium");
+  w.setPadding(4, 8, 4, 8);
+  const rows = [["Calories", d.cal, ""], ["Protein", d.p, "g"], ["Water", d.water, "oz"]];
+  rows.forEach(([label, m, unit], i) => {
+    if (i) w.addSpacer(3);
+    const r = w.addStack();
+    r.centerAlignContent();
+    const l = r.addStack();
+    l.size = new Size(50, 0);
+    text(l, label, 11, C.text, "semibold");
+    const img = r.addImage(bar(m.goal ? m.v / m.goal : 0, 40, 5, Color.white(), new Color("#ffffff", 0.3)));
+    img.imageSize = new Size(40, 5);
+    r.addSpacer(6);
+    const v = text(r, `${fmt(m.v)}/${fmt(m.goal)}${unit}`, 11, C.text, hit(m) ? "bold" : "medium");
+    v.minimumScaleFactor = 0.6;
+  });
   return w;
 }
 
