@@ -1992,6 +1992,8 @@ const NAV = [
   { id: 'progress', label: 'Progress', icon: 'chart' },
 ];
 const readHash = () => { const h = (window.location.hash || '').replace('#', ''); return TABS.includes(h) ? h : 'today'; };
+// Widget links: #take-<supplement id> marks that supplement taken for today.
+const readTake = () => { const m = (window.location.hash || '').match(/^#take-(.+)$/); return m ? decodeURIComponent(m[1]) : null; };
 
 function Background() {
   return (
@@ -2022,7 +2024,13 @@ function App() {
   const today = todayKey();
 
   useEffect(() => { const t = setTimeout(() => storage.save(state), 250); return () => clearTimeout(t); }, [state]);
-  useEffect(() => { const h = () => setTab(readHash()); window.addEventListener('hashchange', h); return () => window.removeEventListener('hashchange', h); }, []);
+  const takeRef = useRef(readTake());
+  const [takeTick, setTakeTick] = useState(0);
+  useEffect(() => {
+    const h = () => { const t = readTake(); if (t) { takeRef.current = t; setTakeTick((n) => n + 1); } setTab(readHash()); };
+    window.addEventListener('hashchange', h);
+    return () => window.removeEventListener('hashchange', h);
+  }, []);
 
   const update = useCallback((fn) => setState((s) => { const n = structuredClone(s); fn(n); return n; }), []);
   const replaceState = useCallback((obj) => { setState(normalize(obj)); }, []);
@@ -2107,6 +2115,30 @@ function App() {
   }, [flush]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Apply a widget tap once the database has loaded (or failed), so the mark isn't overwritten by the load.
+  useEffect(() => {
+    const id = takeRef.current;
+    if (!id || sync === 'connecting') return;
+    takeRef.current = null;
+    try { history.replaceState(null, '', '#today'); } catch (e) {}
+    setTab('today');
+    const day = todayKey();
+    const cur = stateRef.current;
+    const sp = (cur.supplements || []).find((x) => x.id === id);
+    if (!sp) { toast('That supplement isn’t in your list anymore', 'warn'); return; }
+    if (cur.suppLog[day]?.[id]) { toast(`${sp.name} was already checked off today`, 'info'); return; }
+    update((st) => {
+      st.suppLog[day] = st.suppLog[day] || {};
+      st.suppLog[day][id] = true;
+      if (sp.mealId) {
+        st.foodLog[day] = st.foodLog[day] || [];
+        const m = st.meals.find((x) => x.id === sp.mealId);
+        if (m && !st.foodLog[day].some((e) => e.auto === id)) st.foodLog[day].push(entryFrom(m, { auto: id }));
+      }
+    });
+    toast(`${sp.name} ✓ — checked off from your widget`, 'good');
+  }, [sync, takeTick, update, toast]);
   useEffect(() => {
     if (!readyRef.current) return;
     const t = setTimeout(() => flush(), 500);

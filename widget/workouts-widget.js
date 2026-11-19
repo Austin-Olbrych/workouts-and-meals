@@ -2,11 +2,13 @@
 // Home Screen: small · medium · large      Lock Screen: rectangular · circular · inline
 // Rectangular lock widget: calories, protein and water with mini bars.
 // Circular widget: set the widget's Parameter to  water  (default),  protein  or  calories.
-// Tapping any widget opens the dashboard.
+// Tapping any widget opens the dashboard. On medium/large, tapping a supplement opens the
+// dashboard and marks it taken (link: #take-<supplement id>).
 
 const SUPABASE_URL = "https://gvsvljaygdfxjpnahyzi.supabase.co";
 const SUPABASE_KEY = "sb_publishable_mxolwm4Z_ig75FV4XNb_rw_30ys5eZr";
-const SITE = "https://austin-olbrych.github.io/workouts-and-meals/#today";
+const SITE_BASE = "https://austin-olbrych.github.io/workouts-and-meals/";
+const SITE = SITE_BASE + "#today";
 
 const C = {
   bg1: "#26262b", bg2: "#0b0b0d", text: "#ffffff", muted: "#a1a1aa",
@@ -55,7 +57,8 @@ async function loadData() {
   });
 
   const supps = s.supplements || [];
-  const taken = supps.filter((x) => row.supplements && row.supplements[x.id]).length;
+  const suppList = supps.map((x) => ({ id: x.id, name: x.name, taken: !!(row.supplements && row.supplements[x.id]) }));
+  const taken = suppList.filter((x) => x.taken).length;
 
   return {
     workout: {
@@ -71,6 +74,7 @@ async function loadData() {
     c: { v: row.carbs_g || 0, goal: Number(t.c) || 400 },
     f: { v: row.fat_g || 0, goal: Number(t.f) || 95 },
     supps: { v: taken, goal: supps.length },
+    suppList,
     steps: row.steps == null ? null : row.steps,
     stepGoal: Number(prof.stepGoal) || 8000,
     sleep: row.sleep_hours == null ? null : row.sleep_hours,
@@ -156,13 +160,47 @@ function metric(stack, label, m, unit, color, width) {
   img.imageSize = new Size(width, 6);
 }
 
+const shortName = (n = "") => (n.length > 9 ? n.split(/[\s-]/)[0] : n);
+const takeUrl = (id) => `${SITE_BASE}#take-${encodeURIComponent(id)}`;
+
+function pillRow(w, list) {
+  const row = w.addStack();
+  row.spacing = 5;
+  list.forEach((sp) => {
+    const p = row.addStack();
+    p.setPadding(3, 8, 3, 8);
+    p.cornerRadius = 9;
+    p.centerAlignContent();
+    if (sp.taken) p.backgroundColor = new Color(C.violet);
+    else { p.borderColor = new Color("#52525b"); p.borderWidth = 1; }
+    text(p, (sp.taken ? "✓ " : "") + shortName(sp.name), 11, sp.taken ? "#1e1240" : C.muted, "semibold");
+    p.url = takeUrl(sp.id);
+  });
+}
+
+function checklist(w, list, width) {
+  for (let i = 0; i < list.length; i += 2) {
+    const row = w.addStack();
+    list.slice(i, i + 2).forEach((sp) => {
+      const cell = row.addStack();
+      cell.size = new Size(width / 2, 18);
+      cell.centerAlignContent();
+      text(cell, sp.taken ? "●" : "○", 11, sp.taken ? C.violet : C.muted, "bold");
+      cell.addSpacer(5);
+      text(cell, sp.name || "", 11, sp.taken ? C.text : C.muted, "medium");
+      cell.addSpacer();
+      cell.url = takeUrl(sp.id);
+    });
+  }
+}
+
 function header(w, d, small) {
   const top = w.addStack();
   top.centerAlignContent();
   const left = top.addStack();
   left.layoutVertically();
   text(left, d.workout.title, small ? 13 : 15, C.text, "bold");
-  text(left, workoutStatus(d.workout), 11, d.workout.completed ? C.violet : C.muted, "medium");
+  text(left, workoutStatus(d.workout) + (small ? "" : d.workout.walk ? " · walk ✓" : " · walk —"), 11, d.workout.completed ? C.violet : C.muted, "medium");
   if (!small) {
     top.addSpacer();
     const df = new DateFormatter();
@@ -191,33 +229,36 @@ function homeWidget(d, family) {
   }
 
   header(w, d, false);
-  w.addSpacer(family === "large" ? 14 : 10);
+  const steps = { v: d.steps || 0, goal: d.stepGoal };
 
   if (family === "medium") {
+    w.addSpacer(8);
     const cols = w.addStack();
     const a = cols.addStack(); a.layoutVertically();
     cols.addSpacer(14);
     const b = cols.addStack(); b.layoutVertically();
-    metric(a, "Water", d.water, " oz", C.purple, 136); a.addSpacer(7);
-    metric(a, "Protein", d.p, " g", C.violet, 136); a.addSpacer(7);
-    metric(a, "Calories", d.cal, "", C.indigo, 136);
-    metric(b, "Carbs", d.c, " g", C.purple, 136); b.addSpacer(7);
-    metric(b, "Fat", d.f, " g", C.indigo, 136); b.addSpacer(7);
-    metric(b, "Supplements", d.supps, "", C.violet, 136);
+    metric(a, "Water", d.water, " oz", C.purple, 136); a.addSpacer(6);
+    metric(a, "Protein", d.p, " g", C.violet, 136);
+    metric(b, "Calories", d.cal, "", C.indigo, 136); b.addSpacer(6);
+    metric(b, "Steps", steps, "", C.purple, 136);
+    w.addSpacer(8);
+    pillRow(w, d.suppList);
     return w;
   }
 
   // large
+  w.addSpacer(12);
   const W = 290;
   [["Water", d.water, " oz", C.purple], ["Protein", d.p, " g", C.violet], ["Calories", d.cal, "", C.indigo],
-   ["Carbs", d.c, " g", C.purple], ["Fat", d.f, " g", C.indigo], ["Supplements", d.supps, "", C.violet]]
-    .forEach(([l, m, u, col], i) => { if (i) w.addSpacer(9); metric(w, l, m, u, col, W); });
-  if (d.steps != null) { w.addSpacer(9); metric(w, "Steps", { v: d.steps, goal: d.stepGoal }, "", C.purple, W); }
+   ["Carbs", d.c, " g", C.purple], ["Fat", d.f, " g", C.indigo], ["Steps", steps, "", C.purple]]
+    .forEach(([l, m, u, col], i) => { if (i) w.addSpacer(7); metric(w, l, m, u, col, W); });
+  w.addSpacer(10);
+  checklist(w, d.suppList, W);
   w.addSpacer();
   const foot = w.addStack();
-  text(foot, d.sleep != null ? `Sleep ${d.sleep} h` : "Sleep not logged", 11, C.muted);
+  text(foot, `Supplements ${d.supps.v}/${d.supps.goal}`, 11, C.muted);
   foot.addSpacer();
-  text(foot, d.workout.walk ? "Walk ✓" : "Walk —", 11, d.workout.walk ? C.violet : C.muted);
+  text(foot, d.sleep != null ? `Sleep ${d.sleep} h` : "Sleep not logged", 11, C.muted);
   return w;
 }
 
