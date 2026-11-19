@@ -163,35 +163,50 @@ function metric(stack, label, m, unit, color, width) {
 const shortName = (n = "") => (n.length > 9 ? n.split(/[\s-]/)[0] : n);
 const takeUrl = (id) => `${SITE_BASE}#take-${encodeURIComponent(id)}`;
 
-function pillRow(w, list) {
-  const row = w.addStack();
-  row.spacing = 5;
-  list.forEach((sp) => {
-    const p = row.addStack();
-    p.setPadding(3, 8, 3, 8);
-    p.cornerRadius = 9;
-    p.centerAlignContent();
-    if (sp.taken) p.backgroundColor = new Color(C.violet);
-    else { p.borderColor = new Color("#52525b"); p.borderWidth = 1; }
-    text(p, (sp.taken ? "✓ " : "") + shortName(sp.name), 11, sp.taken ? "#1e1240" : C.muted, "semibold");
-    p.url = takeUrl(sp.id);
-  });
+function pill(parent, sp, label, width) {
+  const p = parent.addStack();
+  p.setPadding(width ? 5 : 3, 8, width ? 5 : 3, 8);
+  p.cornerRadius = 10;
+  p.centerAlignContent();
+  if (width) { p.size = new Size(width, 0); p.addSpacer(); }
+  if (sp.taken) p.backgroundColor = new Color(C.violet);
+  else { p.borderColor = new Color("#52525b"); p.borderWidth = 1; }
+  text(p, (sp.taken ? "✓ " : "") + label, 11, sp.taken ? "#1e1240" : C.muted, "semibold");
+  if (width) p.addSpacer();
+  p.url = takeUrl(sp.id);
+  return p;
 }
 
-function checklist(w, list, width) {
+// One centered row of compact pills (medium widget).
+function pillRow(w, list) {
+  const row = w.addStack();
+  row.addSpacer();
+  list.forEach((sp, i) => { if (i) row.addSpacer(5); pill(row, sp, shortName(sp.name)); });
+  row.addSpacer();
+}
+
+// Centered 2×2 grid of full-name pills (large widget).
+function pillGrid(w, list, cellWidth) {
   for (let i = 0; i < list.length; i += 2) {
+    if (i) w.addSpacer(6);
     const row = w.addStack();
-    list.slice(i, i + 2).forEach((sp) => {
-      const cell = row.addStack();
-      cell.size = new Size(width / 2, 18);
-      cell.centerAlignContent();
-      text(cell, sp.taken ? "●" : "○", 11, sp.taken ? C.violet : C.muted, "bold");
-      cell.addSpacer(5);
-      text(cell, sp.name || "", 11, sp.taken ? C.text : C.muted, "medium");
-      cell.addSpacer();
-      cell.url = takeUrl(sp.id);
-    });
+    row.addSpacer();
+    list.slice(i, i + 2).forEach((sp, j) => { if (j) row.addSpacer(6); pill(row, sp, sp.name || "", cellWidth); });
+    row.addSpacer();
   }
+}
+
+// Two centered columns of progress bars.
+function barGrid(w, left, right, width) {
+  const cols = w.addStack();
+  cols.addSpacer();
+  [left, right].forEach((items, ci) => {
+    if (ci) cols.addSpacer(14);
+    const col = cols.addStack();
+    col.layoutVertically();
+    items.forEach(([l, m, u, color], i) => { if (i) col.addSpacer(6); metric(col, l, m, u, color, width); });
+  });
+  cols.addSpacer();
 }
 
 function header(w, d, small) {
@@ -233,14 +248,9 @@ function homeWidget(d, family) {
 
   if (family === "medium") {
     w.addSpacer(8);
-    const cols = w.addStack();
-    const a = cols.addStack(); a.layoutVertically();
-    cols.addSpacer(14);
-    const b = cols.addStack(); b.layoutVertically();
-    metric(a, "Water", d.water, " oz", C.purple, 136); a.addSpacer(6);
-    metric(a, "Protein", d.p, " g", C.violet, 136);
-    metric(b, "Calories", d.cal, "", C.indigo, 136); b.addSpacer(6);
-    metric(b, "Steps", steps, "", C.purple, 136);
+    barGrid(w,
+      [["Water", d.water, " oz", C.purple], ["Protein", d.p, " g", C.violet]],
+      [["Calories", d.cal, "", C.indigo], ["Steps", steps, "", C.purple]], 136);
     w.addSpacer(8);
     pillRow(w, d.suppList);
     return w;
@@ -248,12 +258,11 @@ function homeWidget(d, family) {
 
   // large
   w.addSpacer(12);
-  const W = 290;
-  [["Water", d.water, " oz", C.purple], ["Protein", d.p, " g", C.violet], ["Calories", d.cal, "", C.indigo],
-   ["Carbs", d.c, " g", C.purple], ["Fat", d.f, " g", C.indigo], ["Steps", steps, "", C.purple]]
-    .forEach(([l, m, u, col], i) => { if (i) w.addSpacer(7); metric(w, l, m, u, col, W); });
+  barGrid(w,
+    [["Water", d.water, " oz", C.purple], ["Protein", d.p, " g", C.violet], ["Calories", d.cal, "", C.indigo]],
+    [["Carbs", d.c, " g", C.purple], ["Fat", d.f, " g", C.indigo], ["Steps", steps, "", C.purple]], 136);
   w.addSpacer(10);
-  checklist(w, d.suppList, W);
+  pillGrid(w, d.suppList, 128);
   w.addSpacer();
   const foot = w.addStack();
   text(foot, `Supplements ${d.supps.v}/${d.supps.goal}`, 11, C.muted);
