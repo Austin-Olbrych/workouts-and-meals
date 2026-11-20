@@ -204,6 +204,13 @@ function migrate(s) {
     s.profile = { ...s.profile, age: 30, targetWeight: s.profile.targetWeight || 200, goalSetV1: true };
     changed = true;
   }
+  if (s.profile && !s.profile.labelsV1) { // real supplement labels (Nov 19)
+    s.profile = { ...s.profile, labelsV1: true };
+    const fix = { 'm-shake': DEFAULT_MEALS.find((m) => m.id === 'm-shake'), 'm-collagen': DEFAULT_MEALS.find((m) => m.id === 'm-collagen') };
+    s.meals = (s.meals || []).map((m) => (fix[m.id] ? { ...m, cal: fix[m.id].cal, p: fix[m.id].p, c: fix[m.id].c, f: fix[m.id].f, est: false } : m));
+    s.supplements = (s.supplements || []).map((x) => { const d = DEFAULT_SUPPS.find((y) => y.id === x.id); return d && ['s-preworkout', 's-collagen', 's-shake'].includes(x.id) ? { ...x, dose: d.dose, when: d.when } : x; });
+    changed = true;
+  }
   if (num(s.programVersion) >= PROGRAM_VERSION) return changed;
   const p = defaultProgram();
   const prev = (s.programs || []).find((x) => x.id === p.id);
@@ -224,9 +231,9 @@ const DEFAULT_MEALS = [
   { id: 'm-eggs', name: 'Eggs, sausage & hash browns', tag: 'Meal 2', cal: 540, p: 29, c: 18, f: 38, est: true },
   { id: 'm-pasta', name: 'Protein pasta', tag: 'Lunch', cal: 620, p: 42, c: 78, f: 14, est: true },
   { id: 'm-dateballs', name: 'PB date balls + fruit', tag: 'Pre-workout', cal: 300, p: 6, c: 50, f: 10, est: true },
-  { id: 'm-shake', name: 'Raw Nutrition protein shake (+ creatine)', tag: 'Post-workout', cal: 130, p: 25, c: 4, f: 2, est: true },
+  { id: 'm-shake', name: 'Raw Nutrition protein shake (+ creatine)', tag: 'Post-workout', cal: 140, p: 25, c: 4, f: 2.5 },
   { id: 'm-dinner', name: 'Protein, rice & veggies', tag: 'Dinner', cal: 750, p: 62, c: 77, f: 21, est: true },
-  { id: 'm-collagen', name: 'Collagen (5 g, in pre-workout)', tag: 'Pre-workout', cal: 20, p: 5, c: 0, f: 0, est: true },
+  { id: 'm-collagen', name: 'Collagen (5 g, in pre-workout)', tag: 'Pre-workout', cal: 18, p: 4.5, c: 0, f: 0 },
 ];
 
 const FOOD_DB = [
@@ -253,16 +260,16 @@ const FOOD_DB = [
 ];
 
 const DEFAULT_SUPPS = [
-  { id: 's-preworkout', name: 'Pre-workout', dose: 'Raw Nutrition Pump · 1 scoop', when: 'Before leaving for the gym' },
-  { id: 's-collagen', name: 'Collagen', dose: '5 g', when: 'Mixed into the pre-workout — logs its protein', mealId: 'm-collagen' },
-  { id: 's-shake', name: 'Protein', dose: 'Raw Nutrition · 1 scoop (25 g)', when: 'After the gym — logs the shake’s macros', mealId: 'm-shake' },
+  { id: 's-preworkout', name: 'Pre-workout', dose: 'Raw Pump Non-Stim · 1 scoop', when: 'Before leaving for the gym · no calories' },
+  { id: 's-collagen', name: 'Collagen', dose: '5 g (¼ serving)', when: 'Mixed into the pre-workout — logs its protein', mealId: 'm-collagen' },
+  { id: 's-shake', name: 'Protein', dose: 'Raw whey isolate · 1 scoop (25 g protein)', when: 'After the gym — logs the shake’s macros', mealId: 'm-shake' },
   { id: 's-creatine', name: 'Creatine', dose: '5 g', when: 'In the post-workout protein shake' },
 ];
 
 function defaultProfile() {
   return {
     name: 'Austin', heightIn: 71, startWeight: 175, age: 30, sex: 'male',
-    activity: 1.55, goal: 'lean-bulk', targetWeight: 200, goalSetV1: true, waterGoal: 100, workoutsPerWeek: 5, sleepGoal: 8, stepGoal: 8000,
+    activity: 1.55, goal: 'lean-bulk', targetWeight: 200, goalSetV1: true, labelsV1: true, waterGoal: 100, workoutsPerWeek: 5, sleepGoal: 8, stepGoal: 8000,
     customTargets: true, custom: { ...MY_TARGETS },
   };
 }
