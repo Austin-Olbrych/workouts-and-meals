@@ -2,7 +2,7 @@
 <html lang="en" style="color-scheme: dark">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
 <title>Workouts & Meals</title>
 <meta name="theme-color" content="#0b0b0d" />
 <meta name="description" content="Personal workout, nutrition and progress dashboard." />
@@ -15,6 +15,13 @@
 </script>
 <style>
   html, body { background: #0b0b0d; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { overflow-x: clip; }
+  /* Grids never grow wider than the screen: one column by default, and long content truncates instead of stretching. */
+  :where(.grid) { grid-template-columns: minmax(0, 1fr); }
+  .grid > * { min-width: 0; }
+  /* iPhone Safari zooms in on inputs smaller than 16px — keep them at 16px on phones. */
+  @media (max-width: 640px) { input, select, textarea { font-size: 16px !important; } }
   body { font-feature-settings: "cv11", "ss01"; -webkit-tap-highlight-color: transparent; }
   input[type=number]::-webkit-outer-spin-button,
   input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
@@ -219,6 +226,20 @@ function migrate(s) {
     s.supplements = (s.supplements || []).map((x) => (x.id === 's-collagen' && /^5 g/.test(x.dose || '') ? { ...x, dose: '1 scoop (4 g)' } : x));
     changed = true;
   }
+  if (s.profile && !s.profile.suppsV3) { // supplements are independent — no "mixed into" wording
+    s.profile = { ...s.profile, suppsV3: true };
+    const oldWhen = /Mixed into|In the post-workout|After the gym|Before leaving/;
+    s.supplements = (s.supplements || []).map((x) => {
+      const d = DEFAULT_SUPPS.find((y) => y.id === x.id);
+      return d && oldWhen.test(x.when || '') ? { ...x, when: d.when } : x;
+    });
+    s.meals = (s.meals || []).map((m) => {
+      if (m.id === 'm-shake' && /protein shake \(\+ creatine\)/i.test(m.name)) return { ...m, name: 'Protein shake (Raw whey · 1 scoop)' };
+      if (m.id === 'm-collagen' && /in pre-workout/i.test(m.name)) return { ...m, name: 'Collagen (1 scoop · 4 g)' };
+      return m;
+    });
+    changed = true;
+  }
   if (num(s.programVersion) >= PROGRAM_VERSION) return changed;
   const p = defaultProgram();
   const prev = (s.programs || []).find((x) => x.id === p.id);
@@ -239,9 +260,9 @@ const DEFAULT_MEALS = [
   { id: 'm-eggs', name: 'Eggs, sausage & hash browns', tag: 'Meal 2', cal: 540, p: 29, c: 18, f: 38, est: true },
   { id: 'm-pasta', name: 'Protein pasta', tag: 'Lunch', cal: 620, p: 42, c: 78, f: 14, est: true },
   { id: 'm-dateballs', name: 'PB date balls + fruit', tag: 'Pre-workout', cal: 300, p: 6, c: 50, f: 10, est: true },
-  { id: 'm-shake', name: 'Raw Nutrition protein shake (+ creatine)', tag: 'Post-workout', cal: 140, p: 25, c: 4, f: 2.5 },
+  { id: 'm-shake', name: 'Protein shake (Raw whey · 1 scoop)', tag: 'Post-workout', cal: 140, p: 25, c: 4, f: 2.5 },
   { id: 'm-dinner', name: 'Protein, rice & veggies', tag: 'Dinner', cal: 750, p: 62, c: 77, f: 21, est: true },
-  { id: 'm-collagen', name: 'Collagen (1 scoop · 4 g, in pre-workout)', tag: 'Pre-workout', cal: 14, p: 3.6, c: 0, f: 0 },
+  { id: 'm-collagen', name: 'Collagen (1 scoop · 4 g)', tag: 'Pre-workout', cal: 14, p: 3.6, c: 0, f: 0 },
 ];
 
 const FOOD_DB = [
@@ -268,16 +289,16 @@ const FOOD_DB = [
 ];
 
 const DEFAULT_SUPPS = [
-  { id: 's-preworkout', name: 'Pre-workout', dose: 'Raw Pump Non-Stim · 1 scoop', when: 'Before leaving for the gym · no calories' },
-  { id: 's-collagen', name: 'Collagen', dose: '1 scoop (4 g)', when: 'Mixed into the pre-workout — logs its protein', mealId: 'm-collagen' },
-  { id: 's-shake', name: 'Protein', dose: 'Raw whey isolate · 1 scoop (25 g protein)', when: 'After the gym — logs the shake’s macros', mealId: 'm-shake' },
-  { id: 's-creatine', name: 'Creatine', dose: '5 g', when: 'In the post-workout protein shake' },
+  { id: 's-preworkout', name: 'Pre-workout', dose: 'Raw Pump Non-Stim · 1 scoop', when: 'No calories' },
+  { id: 's-collagen', name: 'Collagen', dose: '1 scoop (4 g)', when: '', mealId: 'm-collagen' },
+  { id: 's-shake', name: 'Protein', dose: 'Raw whey isolate · 1 scoop', when: '', mealId: 'm-shake' },
+  { id: 's-creatine', name: 'Creatine', dose: '5 g', when: 'No calories' },
 ];
 
 function defaultProfile() {
   return {
     name: 'Austin', heightIn: 71, startWeight: 175, age: 30, sex: 'male',
-    activity: 1.55, goal: 'lean-bulk', targetWeight: 200, goalSetV1: true, labelsV1: true, collagenV2: true, waterGoal: 100, workoutsPerWeek: 5, sleepGoal: 8, stepGoal: 8000,
+    activity: 1.55, goal: 'lean-bulk', targetWeight: 200, goalSetV1: true, labelsV1: true, collagenV2: true, suppsV3: true, waterGoal: 100, workoutsPerWeek: 5, sleepGoal: 8, stepGoal: 8000,
     customTargets: true, custom: { ...MY_TARGETS },
   };
 }
@@ -851,7 +872,7 @@ function TodayView({ state, update, toast, go, targets, today, toggleSupp, addWa
         {/* Supplements */}
         <Card title="Supplements" subtitle={`${suppDone} of ${supps.length} taken`} icon="pill" accent="text-indigo-300">
           <div className="space-y-1.5">
-            {supps.map((sp) => <SuppToggle key={sp.id} sp={sp} on={!!state.suppLog[today]?.[sp.id]} onToggle={() => toggleSupp(today, sp)} compact />)}
+            {supps.map((sp) => <SuppToggle key={sp.id} sp={sp} on={!!state.suppLog[today]?.[sp.id]} at={state.suppLog[today]?.[sp.id]} onToggle={() => toggleSupp(today, sp)} compact />)}
           </div>
         </Card>
 
@@ -1340,7 +1361,10 @@ function PrinciplesCard() {
 /* =========================================================
    NUTRITION
    ========================================================= */
-function SuppToggle({ sp, on, onToggle, compact }) {
+const timeOf = (v) => (typeof v === 'number' ? new Date(v).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '');
+function SuppToggle({ sp, on, at, meal, onToggle, compact }) {
+  const logs = meal ? `${fmtInt(meal.cal)} kcal · ${Math.round(meal.p * 10) / 10} g protein` : (sp.when || 'No calories');
+  const sub = on ? `Taken${timeOf(at) ? ' ' + timeOf(at) : ''}${meal ? ' · +' + logs : ''}` : (meal ? 'Logs ' + logs : logs);
   return (
     <button type="button" role="switch" aria-checked={on} onClick={onToggle}
       className={`w-full flex items-center gap-3 rounded-xl border text-left transition ${compact ? 'px-2.5 py-1.5' : 'px-3 py-2.5'} ${on ? 'bg-violet-400/10 border-violet-300/35' : 'bg-white/[0.03] border-white/10 hover:bg-white/[0.06]'}`}>
@@ -1348,8 +1372,8 @@ function SuppToggle({ sp, on, onToggle, compact }) {
         <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
       </span>
       <span className="min-w-0 flex-1">
-        <span className={`block text-sm font-medium ${on ? 'text-violet-200' : 'text-white'}`}>{sp.name} <span className="text-zinc-400 font-normal text-xs">· {sp.dose}</span></span>
-        {!compact && <span className="block text-[11px] text-zinc-400 truncate">{sp.when}</span>}
+        <span className={`block text-sm font-medium truncate ${on ? 'text-violet-200' : 'text-white'}`}>{sp.name} <span className="text-zinc-400 font-normal text-xs">· {sp.dose}</span></span>
+        {(!compact || on) && <span className={`block text-[11px] truncate ${on ? 'text-violet-300/90' : 'text-zinc-400'}`}>{compact ? `Taken ${timeOf(at)}`.trim() : sub}</span>}
       </span>
     </button>
   );
@@ -1460,7 +1484,7 @@ function NutritionView({ state, update, toast, today, targets, toggleSupp, addWa
       <div className="grid lg:grid-cols-3 gap-5">
         <Card title="Supplements" subtitle={suppDone === supps.length ? 'All taken ✓' : `${suppDone} of ${supps.length} taken`} icon="pill" accent="text-indigo-300">
           <div className="space-y-2">
-            {supps.map((sp) => <SuppToggle key={sp.id} sp={sp} on={!!state.suppLog[date]?.[sp.id]} onToggle={() => toggleSupp(date, sp)} />)}
+            {supps.map((sp) => <SuppToggle key={sp.id} sp={sp} on={!!state.suppLog[date]?.[sp.id]} at={state.suppLog[date]?.[sp.id]} meal={sp.mealId ? state.meals.find((m) => m.id === sp.mealId) : null} onToggle={() => toggleSupp(date, sp)} />)}
           </div>
           <SuppManager state={state} update={update} />
         </Card>
@@ -1471,8 +1495,8 @@ function NutritionView({ state, update, toast, today, targets, toggleSupp, addWa
               {log.map((e) => (
                 <li key={e.id} className="py-2.5 flex items-center gap-3">
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium text-white truncate">{e.name}{e.auto && <span className="ml-2 align-middle"><Chip tone="indigo">from toggle</Chip></span>}</div>
-                    <div className="text-[11px] text-zinc-400 tabular-nums">{fmtInt(e.cal * e.servings)} kcal · P {fmtInt(e.p * e.servings)} · C {fmtInt(e.c * e.servings)} · F {fmtInt(e.f * e.servings)}</div>
+                    <div className="text-sm font-medium text-white truncate">{e.name}</div>
+                    <div className="text-[11px] text-zinc-400 tabular-nums truncate">{fmtInt(e.cal * e.servings)} kcal · P {fmtInt(e.p * e.servings)} · C {fmtInt(e.c * e.servings)} · F {fmtInt(e.f * e.servings)}{e.auto ? ' · supplement' : ''}</div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <button className={btnIcon + ' !w-7 !h-7'} aria-label="Fewer servings" onClick={() => setServ(e.id, e.servings - 0.5)}><Icon name="minus" className="w-3 h-3" /></button>
@@ -2145,7 +2169,7 @@ function App() {
     if (cur.suppLog[day]?.[id]) { toast(`${sp.name} was already checked off today`, 'info'); return; }
     update((st) => {
       st.suppLog[day] = st.suppLog[day] || {};
-      st.suppLog[day][id] = true;
+      st.suppLog[day][id] = Date.now();
       if (sp.mealId) {
         st.foodLog[day] = st.foodLog[day] || [];
         const m = st.meals.find((x) => x.id === sp.mealId);
@@ -2221,7 +2245,7 @@ function App() {
     const on = !!state.suppLog[date]?.[sp.id];
     update((s) => {
       s.suppLog[date] ||= {};
-      s.suppLog[date][sp.id] = !on;
+      if (on) delete s.suppLog[date][sp.id]; else s.suppLog[date][sp.id] = Date.now();
       if (sp.mealId) {
         s.foodLog[date] ||= [];
         if (!on) { const m = s.meals.find((x) => x.id === sp.mealId); if (m) s.foodLog[date].push(entryFrom(m, { auto: sp.id })); }
